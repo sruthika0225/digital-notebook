@@ -3,133 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Digital Notebook — Prototype</title>
-<style>
-  /* ---------- Design tokens ---------- */
-  :root{
-    --paper: #FAF6EC;
-    --paper-line: #E4DCC8;
-    --ink: #2B2E38;
-    --ink-soft: #6B6F7A;
-    --teal: #2F6F6B;
-    --teal-dark: #234F4C;
-    --rust: #B5533C;
-    --panel: #FFFFFF;
-    --shadow: 0 2px 10px rgba(43,46,56,0.12);
-  }
-
-  *{ box-sizing: border-box; }
-
-  html, body{
-    margin:0; padding:0; height:100%;
-    background: var(--teal-dark);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: var(--ink);
-    overscroll-behavior: none;
-  }
-
-  /* ---------- Top toolbar ---------- */
-  .toolbar{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:10px 14px;
-    background: var(--teal-dark);
-    color:#fff;
-    flex-wrap: wrap;
-  }
-
-  .toolbar .title{
-    font-size:15px;
-    font-weight:600;
-    letter-spacing:0.2px;
-    margin-right:auto;
-    opacity:0.9;
-  }
-
-  button.tool{
-    background: rgba(255,255,255,0.08);
-    border: 1px solid rgba(255,255,255,0.18);
-    color:#fff;
-    padding:8px 12px;
-    border-radius:8px;
-    font-size:13px;
-    cursor:pointer;
-    transition: background 0.15s ease;
-  }
-  button.tool:hover{ background: rgba(255,255,255,0.18); }
-  button.tool.active{ background: var(--rust); border-color: var(--rust); }
-
-  input[type="color"]{
-    width:34px; height:34px;
-    border:none; border-radius:8px;
-    padding:0; cursor:pointer;
-    background:none;
-  }
-
-  input[type="range"]{ width:80px; }
-
-  /* ---------- Page area ---------- */
-  .stage{
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    padding:24px;
-    height: calc(100% - 130px);
-  }
-
-  .page-wrap{
-    background: var(--panel);
-    border-radius: 6px;
-    box-shadow: var(--shadow);
-    overflow:hidden;
-    touch-action: none;
-  }
-
-  canvas{
-    display:block;
-    background:
-      repeating-linear-gradient(
-        to bottom,
-        var(--paper) 0px,
-        var(--paper) 33px,
-        var(--paper-line) 34px
-      );
-  }
-
-  /* ---------- Bottom page nav ---------- */
-  .pagebar{
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:16px;
-    padding:12px;
-    background: var(--teal);
-    color:#fff;
-  }
-
-  .pagebar button{
-    background: rgba(255,255,255,0.12);
-    border:1px solid rgba(255,255,255,0.25);
-    color:#fff;
-    padding:6px 14px;
-    border-radius:20px;
-    cursor:pointer;
-    font-size:14px;
-  }
-  .pagebar button:disabled{ opacity:0.35; cursor:not-allowed; }
-
-  .pagebar .label{ font-size:14px; opacity:0.95; min-width:110px; text-align:center; }
-
-  #imageLoader{ display:none; }
-
-  .hint{
-    font-size:11px;
-    color: var(--ink-soft);
-    text-align:center;
-    padding: 4px 0 10px;
-  }
-</style>
+<title>Digital Notebook</title>
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -141,15 +17,21 @@
     <input type="color" id="colorPicker" value="#2B2E38" title="Pen color">
     <input type="range" id="sizeSlider" min="1" max="20" value="3" title="Pen size">
 
+    <button class="tool" id="moveBtn">🖐️ Move / Resize</button>
     <button class="tool" id="imageBtn">🖼️ Insert Image</button>
     <input type="file" id="imageLoader" accept="image/*">
+    <button class="tool" id="deleteImgBtn">❌ Remove Image</button>
+
+    <button class="tool" id="ocrBtn">🤖 Handwriting → Text</button>
+    <button class="tool" id="addTextBtn">🔤 Add Text</button>
 
     <button class="tool" id="clearBtn">🗑️ Clear Page</button>
   </div>
 
   <div class="stage">
     <div class="page-wrap">
-      <canvas id="canvas" width="750" height="960"></canvas>
+      <div id="imagesLayer"></div>
+      <canvas id="inkCanvas" width="750" height="960"></canvas>
     </div>
   </div>
 
@@ -159,251 +41,34 @@
     <button id="nextBtn">Next →</button>
     <button id="addBtn">+ New Page</button>
   </div>
-  <div class="hint">Draws with mouse, finger, or stylus. Everything auto-saves in this browser (offline-friendly).</div>
+  <div class="hint">Pen mode: draw. Move mode: drag pasted images/text or resize with the corner handle. Double-tap text to edit it.</div>
 
-<script>
-/*
-  ====================================================================
-  DIGITAL NOTEBOOK — PROTOTYPE
-  ====================================================================
-  This is a learning-focused prototype. It covers three core features
-  from the project plan:
-    1. A drawing canvas (works with touch / stylus / mouse)
-    2. Pasting/inserting images onto a page
-    3. A notebook with unlimited pages that remembers where you left off
+  <div class="ocr-progress hidden" id="ocrProgress">
+    <div class="spinner"></div>
+    <div id="ocrProgressLabel">Reading your handwriting…</div>
+  </div>
 
-  Notes are stored in the browser's localStorage, so this already
-  behaves "offline first" — no server needed yet. Later steps (AI
-  handwriting-to-text, login, cloud sync, PDF export) will build on
-  top of this same canvas.
-  ====================================================================
-*/
+  <div class="modal-backdrop hidden" id="ocrModal">
+    <div class="modal">
+      <h3>Recognized text</h3>
+      <p class="sub">Edit anything that came out wrong, then insert it as a text box on the page.</p>
+      <textarea id="ocrResultText"></textarea>
+      <div class="modal-actions">
+        <button id="ocrCancelBtn">Cancel</button>
+        <button id="ocrCopyBtn">Copy</button>
+        <button class="primary" id="ocrInsertBtn">Insert as Text</button>
+      </div>
+    </div>
+  </div>
 
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-
-// ---------- Notebook data model ----------
-// Each page is stored as a base64 PNG "snapshot" of the canvas.
-// This is the simplest way to persist hand-drawn + pasted content.
-const STORAGE_KEY = 'notebook_pages_v1';
-const CURRENT_PAGE_KEY = 'notebook_current_page_v1';
-
-let pages = loadPages();          // array of image data-URLs (or null for blank)
-let currentPage = loadCurrentPage();
-
-function loadPages() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try { return JSON.parse(raw); } catch (e) { /* fall through */ }
-  }
-  return [null]; // start with one blank page
-}
-
-function loadCurrentPage() {
-  const raw = localStorage.getItem(CURRENT_PAGE_KEY);
-  const idx = raw ? parseInt(raw, 10) : 0;
-  return Number.isNaN(idx) ? 0 : idx;
-}
-
-function savePages() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pages));
-}
-
-function saveCurrentPage() {
-  localStorage.setItem(CURRENT_PAGE_KEY, String(currentPage));
-}
-
-// ---------- Drawing state ----------
-let drawing = false;
-let mode = 'pen'; // 'pen' or 'eraser'
-let penColor = document.getElementById('colorPicker').value;
-let penSize = parseInt(document.getElementById('sizeSlider').value, 10);
-let lastX = 0, lastY = 0;
-
-function getPos(e) {
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
-  const scaleY = canvas.height / rect.height;
-  const point = e.touches ? e.touches[0] : e;
-  return {
-    x: (point.clientX - rect.left) * scaleX,
-    y: (point.clientY - rect.top) * scaleY
-  };
-}
-
-function startDraw(e) {
-  e.preventDefault();
-  drawing = true;
-  const pos = getPos(e);
-  lastX = pos.x; lastY = pos.y;
-}
-
-function draw(e) {
-  if (!drawing) return;
-  e.preventDefault();
-  const pos = getPos(e);
-
-  ctx.strokeStyle = mode === 'eraser' ? '#FAF6EC' : penColor;
-  ctx.lineWidth = mode === 'eraser' ? penSize * 4 : penSize;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(pos.x, pos.y);
-  ctx.stroke();
-
-  lastX = pos.x; lastY = pos.y;
-}
-
-function endDraw() {
-  if (!drawing) return;
-  drawing = false;
-  persistCurrentPage(); // save a snapshot after every stroke
-}
-
-// Mouse + touch + pen (stylus) all use the same pointer events
-canvas.addEventListener('pointerdown', startDraw);
-canvas.addEventListener('pointermove', draw);
-canvas.addEventListener('pointerup', endDraw);
-canvas.addEventListener('pointerleave', endDraw);
-
-// ---------- Toolbar behavior ----------
-const penBtn = document.getElementById('penBtn');
-const eraserBtn = document.getElementById('eraserBtn');
-
-penBtn.addEventListener('click', () => {
-  mode = 'pen';
-  penBtn.classList.add('active');
-  eraserBtn.classList.remove('active');
-});
-
-eraserBtn.addEventListener('click', () => {
-  mode = 'eraser';
-  eraserBtn.classList.add('active');
-  penBtn.classList.remove('active');
-});
-
-document.getElementById('colorPicker').addEventListener('input', (e) => {
-  penColor = e.target.value;
-});
-
-document.getElementById('sizeSlider').addEventListener('input', (e) => {
-  penSize = parseInt(e.target.value, 10);
-});
-
-document.getElementById('clearBtn').addEventListener('click', () => {
-  if (confirm('Clear this page? This cannot be undone.')) {
-    clearCanvas();
-    persistCurrentPage();
-  }
-});
-
-// ---------- Image insert ----------
-const imageBtn = document.getElementById('imageBtn');
-const imageLoader = document.getElementById('imageLoader');
-
-imageBtn.addEventListener('click', () => imageLoader.click());
-
-imageLoader.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    const img = new Image();
-    img.onload = () => {
-      // Fit the image within the page, centered near the top
-      const maxW = canvas.width * 0.8;
-      const scale = Math.min(maxW / img.width, 1);
-      const w = img.width * scale;
-      const h = img.height * scale;
-      const x = (canvas.width - w) / 2;
-      const y = 40;
-      ctx.drawImage(img, x, y, w, h);
-      persistCurrentPage();
-    };
-    img.src = evt.target.result;
-  };
-  reader.readAsDataURL(file);
-  imageLoader.value = ''; // allow choosing the same file again later
-});
-
-// Also support pasting an image directly from the clipboard (Ctrl+V)
-document.addEventListener('paste', (e) => {
-  const items = e.clipboardData && e.clipboardData.items;
-  if (!items) return;
-  for (const item of items) {
-    if (item.type.indexOf('image') !== -1) {
-      const blob = item.getAsFile();
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        const img = new Image();
-        img.onload = () => {
-          const maxW = canvas.width * 0.8;
-          const scale = Math.min(maxW / img.width, 1);
-          const w = img.width * scale;
-          const h = img.height * scale;
-          ctx.drawImage(img, (canvas.width - w) / 2, 40, w, h);
-          persistCurrentPage();
-        };
-        img.src = evt.target.result;
-      };
-      reader.readAsDataURL(blob);
-    }
-  }
-});
-
-// ---------- Page management ----------
-const pageLabel = document.getElementById('pageLabel');
-const prevBtn = document.getElementById('prevBtn');
-const nextBtn = document.getElementById('nextBtn');
-const addBtn = document.getElementById('addBtn');
-
-function clearCanvas() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function persistCurrentPage() {
-  pages[currentPage] = canvas.toDataURL('image/png');
-  savePages();
-}
-
-function renderPage(index) {
-  clearCanvas();
-  const dataUrl = pages[index];
-  if (dataUrl) {
-    const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0);
-    img.src = dataUrl;
-  }
-  pageLabel.textContent = `Page ${index + 1} of ${pages.length}`;
-  prevBtn.disabled = index === 0;
-  nextBtn.disabled = index === pages.length - 1;
-}
-
-function goToPage(index) {
-  currentPage = index;
-  saveCurrentPage();
-  renderPage(currentPage);
-}
-
-prevBtn.addEventListener('click', () => {
-  if (currentPage > 0) goToPage(currentPage - 1);
-});
-
-nextBtn.addEventListener('click', () => {
-  if (currentPage < pages.length - 1) goToPage(currentPage + 1);
-});
-
-addBtn.addEventListener('click', () => {
-  pages.push(null);
-  savePages();
-  goToPage(pages.length - 1);
-});
-
-// ---------- Boot up: resume exactly where the user left off ----------
-if (currentPage >= pages.length) currentPage = pages.length - 1;
-renderPage(currentPage);
-</script>
+  <!-- Load order matters: each file below can use functions/variables
+       defined in the ones before it. app.js must be last since it
+       boots the app using everything else. -->
+  <script src="js/storage.js"></script>
+  <script src="js/canvas.js"></script>
+  <script src="js/images.js"></script>
+  <script src="js/pages.js"></script>
+  <script src="js/handwriting.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
