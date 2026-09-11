@@ -1,41 +1,36 @@
-# Digital Notebook
+# 📓 Digital Notebook
 
-A free, offline-first digital notebook web app — draw, paste images, convert
-handwriting to text, and flip through unlimited pages. Built to run well even
-on low-budget tablets, not just premium ones. A personal, non-profit learning
-project.
+A lightweight, beginner-friendly digital notebook web app built with vanilla HTML, CSS and JavaScript.
 
-## Features (current prototype)
-- Drawing canvas (mouse, touch, stylus) with pen + eraser
-- Insert images (upload or paste) — movable and resizable
-- Unlimited pages — add, navigate, auto-resumes the last page you were on
-- Handwriting → Text using Tesseract.js (free, on-device OCR)
-- Everything auto-saves locally, works fully offline
+## Current Phase 3 features
 
-## Project structure
-```
-digital-notebook/
-├── index.html          # App shell
-├── css/styles.css       # All styling
-├── js/
-│   ├── storage.js        # Load/save notebook data (localStorage for now)
-│   ├── canvas.js          # Drawing (pen/eraser) + mode switching
-│   ├── images.js          # Movable/resizable images and text boxes
-│   ├── pages.js           # Multi-page navigation and rendering
-│   ├── handwriting.js     # Handwriting-to-text (OCR)
-│   └── app.js             # Boots the app (load this last)
-└── assets/icons/          # (reserved for future icons)
-```
+- Drawing with mouse, touch and stylus/pointer input
+- Pen size and color controls
+- Eraser
+- Multiple notebook pages
+- Continuous vertical page scrolling
+- New page / Continue section
+- Resume last page and scroll position
+- Paste and upload images
+- Move, resize and delete inserted images
+- Local autosave
+- My Notes home screen
+- Folders
+- Create, rename, move and delete notes
+- Create, rename and delete folders
+- Search notes
+- Git-friendly modular file structure
 
-## Running it
-No build step needed — just open `index.html` in a browser.
+## Parked for Phase 4
 
-## Roadmap
-See `roadmap.md` for the full phase-by-phase plan (GitHub setup, code
-structure, AI handwriting recognition, offline storage upgrade,
-authentication, cloud sync, PDF export, budget-tablet optimization, and
-deployment).
+Handwriting-to-text using Tesseract.js is intentionally not included in the active editor. Recognition quality was not good enough for messy handwriting. A better handwriting-capable AI provider will be evaluated in Phase 4.
 
-## Status
-Currently on **Phase 2 — clean project structure**. Core drawing, images,
-pages, and handwriting-to-text are working in the browser-only prototype.
+## Current storage
+
+This Phase 3 implementation uses `localStorage` to keep the setup simple. Large image-heavy notebooks can exceed browser storage limits. IndexedDB is planned for the next storage phase.
+
+## Run locally
+
+Open `index.html` in a modern browser. For best module behavior, use a local server such as VS Code Live Server.
+
+No build step is required.

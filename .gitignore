@@ -1,4 +1,16 @@
+# VS Code
 .vscode/
+
+# Dependencies
 node_modules/
+
+# Secrets
 .env
+.env.*
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# Logs
+*.log

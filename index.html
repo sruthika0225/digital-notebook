@@ -1,74 +1,103 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Digital Notebook</title>
-<link rel="stylesheet" href="css/styles.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f1e7" />
+  <title>Digital Notebook</title>
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
-
-  <div class="toolbar">
-    <div class="title">📓 Digital Notebook</div>
-
-    <button class="tool active" id="penBtn">✏️ Pen</button>
-    <button class="tool" id="eraserBtn">🧽 Eraser</button>
-    <input type="color" id="colorPicker" value="#2B2E38" title="Pen color">
-    <input type="range" id="sizeSlider" min="1" max="20" value="3" title="Pen size">
-
-    <button class="tool" id="moveBtn">🖐️ Move / Resize</button>
-    <button class="tool" id="imageBtn">🖼️ Insert Image</button>
-    <input type="file" id="imageLoader" accept="image/*">
-    <button class="tool" id="deleteImgBtn">❌ Remove Image</button>
-
-    <button class="tool" id="ocrBtn">🤖 Handwriting → Text</button>
-    <button class="tool" id="addTextBtn">🔤 Add Text</button>
-
-    <button class="tool" id="clearBtn">🗑️ Clear Page</button>
-  </div>
-
-  <div class="stage">
-    <div class="page-wrap">
-      <div id="imagesLayer"></div>
-      <canvas id="inkCanvas" width="750" height="960"></canvas>
+  <header class="topbar">
+    <div class="brand" id="brandHome" role="button" tabindex="0" title="My Notes">
+      <span class="brand-icon">📓</span>
+      <span>Digital Notebook</span>
     </div>
-  </div>
+    <div class="topbar-actions">
+      <button id="backToNotesBtn" class="icon-btn hidden" title="Back to My Notes">←</button>
+      <span id="syncStatus" class="save-status">Saved locally</span>
+    </div>
+  </header>
 
-  <div class="pagebar">
-    <button id="prevBtn">← Prev</button>
-    <div class="label" id="pageLabel">Page 1 of 1</div>
-    <button id="nextBtn">Next →</button>
-    <button id="addBtn">+ New Page</button>
-  </div>
-  <div class="hint">Pen mode: draw. Move mode: drag pasted images/text or resize with the corner handle. Double-tap text to edit it.</div>
+  <main>
+    <!-- MY NOTES -->
+    <section id="notesHome" class="screen">
+      <div class="home-head">
+        <div>
+          <p class="eyebrow">YOUR SPACE</p>
+          <h1>My Notes</h1>
+          <p class="muted">Open a note and continue exactly where you left off.</p>
+        </div>
+        <div class="home-actions">
+          <button id="newFolderBtn" class="secondary-btn">＋ Folder</button>
+          <button id="newNoteBtn" class="primary-btn">＋ New Note</button>
+        </div>
+      </div>
 
-  <div class="ocr-progress hidden" id="ocrProgress">
-    <div class="spinner"></div>
-    <div id="ocrProgressLabel">Reading your handwriting…</div>
-  </div>
+      <div class="search-row">
+        <input id="searchInput" type="search" placeholder="🔍 Search notes..." autocomplete="off" />
+      </div>
 
-  <div class="modal-backdrop hidden" id="ocrModal">
-    <div class="modal">
-      <h3>Recognized text</h3>
-      <p class="sub">Edit anything that came out wrong, then insert it as a text box on the page.</p>
-      <textarea id="ocrResultText"></textarea>
+      <div id="notesTree" class="notes-tree"></div>
+    </section>
+
+    <!-- NOTE EDITOR -->
+    <section id="editorScreen" class="screen hidden">
+      <div class="editor-head">
+        <div>
+          <p class="eyebrow">NOTE</p>
+          <h1 id="editorTitle">Untitled Note</h1>
+          <span id="editorFolder" class="muted"></span>
+        </div>
+        <div class="editor-actions">
+          <button id="renameNoteBtn" class="secondary-btn">Rename</button>
+          <button id="addPageBtn" class="primary-btn">＋ New Page</button>
+        </div>
+      </div>
+
+      <div id="toolbar" class="toolbar">
+        <button id="penBtn" class="tool-btn active" title="Write on the page, including over images">✏️ Pen</button>
+        <button id="eraserBtn" class="tool-btn" title="Erase writing, including over images">🧽 Eraser</button>
+        <button id="adjustImagesBtn" class="tool-btn" title="Move and resize inserted images">↔️ Adjust Image</button>
+        <label class="tool-control">Size
+          <input id="sizeInput" type="range" min="1" max="20" value="3" />
+          <span id="sizeValue">3</span>
+        </label>
+        <label class="tool-control">Color
+          <input id="colorInput" type="color" value="#222222" />
+        </label>
+        <button id="undoBtn" class="tool-btn" title="Undo current page">↶ Undo</button>
+        <button id="redoBtn" class="tool-btn" title="Redo current page">↷ Redo</button>
+      </div>
+
+      <div id="notebookViewport" class="notebook-viewport">
+        <div id="notebookPages" class="notebook-pages"></div>
+        <div id="newPageSection" class="new-page-section">
+          <button id="continueBtn" class="continue-btn">＋ Continue to a new page</button>
+          <p>Keep scrolling to read. Add a new page whenever you need more space.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal -->
+  <div id="modalBackdrop" class="modal-backdrop hidden">
+    <div class="modal" role="dialog" aria-modal="true">
+      <h2 id="modalTitle">Create</h2>
+      <p id="modalMessage" class="muted"></p>
+      <input id="modalInput" class="modal-input" />
+      <div id="modalSelectWrap" class="hidden">
+        <label class="modal-label">Folder
+          <select id="modalSelect" class="modal-input"></select>
+        </label>
+      </div>
       <div class="modal-actions">
-        <button id="ocrCancelBtn">Cancel</button>
-        <button id="ocrCopyBtn">Copy</button>
-        <button class="primary" id="ocrInsertBtn">Insert as Text</button>
+        <button id="modalCancel" class="secondary-btn">Cancel</button>
+        <button id="modalConfirm" class="primary-btn">Create</button>
       </div>
     </div>
   </div>
 
-  <!-- Load order matters: each file below can use functions/variables
-       defined in the ones before it. app.js must be last since it
-       boots the app using everything else. -->
-  <script src="js/storage.js"></script>
-  <script src="js/canvas.js"></script>
-  <script src="js/images.js"></script>
-  <script src="js/pages.js"></script>
-  <script src="js/handwriting.js"></script>
-  <script src="js/app.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

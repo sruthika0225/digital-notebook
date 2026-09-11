@@ -1,40 +1,93 @@
-/*
-  storage.js
-  ----------
-  Everything to do with saving and loading the notebook's data.
-  Currently backed by localStorage (works offline, no setup needed).
-  Phase 5 of the roadmap upgrades this file to use IndexedDB instead,
-  without needing to touch canvas.js, images.js, or pages.js.
+const STORAGE_KEY = "digitalNotebook.v1";
 
-  Data shape (one entry per page):
-    { ink: <dataURL or null>, images: [ {src,x,y,w,h}, ... ], texts: [ {text,x,y,w,h,fontSize}, ... ] }
-*/
+const uid = (prefix = "id") =>
+  `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
 
-const STORAGE_KEY = 'notebook_pages_v3';
-const CURRENT_PAGE_KEY = 'notebook_current_page_v3';
+const now = () => new Date().toISOString();
 
-function loadPages() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try { return JSON.parse(raw); } catch (e) { /* ignore, fall through */ }
+function makePage(number = 1) {
+  return {
+    id: uid("page"),
+    number,
+    strokes: [],
+    images: [],
+    createdAt: now(),
+    updatedAt: now()
+  };
+}
+
+function makeNote(title = "Untitled Note", folderId = null) {
+  const page = makePage(1);
+  return {
+    id: uid("note"),
+    title,
+    folderId,
+    pages: [page],
+    lastPageId: page.id,
+    scrollTop: 0,
+    createdAt: now(),
+    updatedAt: now()
+  };
+}
+
+function makeFolder(name = "New Folder") {
+  return {
+    id: uid("folder"),
+    name,
+    createdAt: now()
+  };
+}
+
+const defaultState = () => {
+  const general = makeFolder("General");
+  const welcome = makeNote("Welcome to Digital Notebook", general.id);
+  welcome.pages[0].strokes = [];
+  return {
+    version: 1,
+    folders: [general],
+    notes: [welcome]
+  };
+};
+
+export function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const initial = defaultState();
+      saveState(initial);
+      return initial;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.notes) || !Array.isArray(parsed.folders)) {
+      throw new Error("Invalid notebook data");
+    }
+    return parsed;
+  } catch (error) {
+    console.error("Could not load notebook data:", error);
+    return defaultState();
   }
-  return [ { ink: null, images: [], texts: [] } ];
 }
 
-function loadCurrentPage() {
-  const raw = localStorage.getItem(CURRENT_PAGE_KEY);
-  const idx = raw ? parseInt(raw, 10) : 0;
-  return Number.isNaN(idx) ? 0 : idx;
+export function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-function savePages() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pages));
+export function createNote(title, folderId = null) {
+  return makeNote(title, folderId);
 }
 
-function saveCurrentPage() {
-  localStorage.setItem(CURRENT_PAGE_KEY, String(currentPage));
+export function createFolder(name) {
+  return makeFolder(name);
 }
 
-// The notebook's live data, loaded as soon as the app starts.
-let pages = loadPages();
-let currentPage = loadCurrentPage();
+export function createPage(number) {
+  return makePage(number);
+}
+
+export function createId(prefix) {
+  return uid(prefix);
+}
+
+export function touch(item) {
+  item.updatedAt = now();
+}

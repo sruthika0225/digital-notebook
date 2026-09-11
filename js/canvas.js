@@ -1,105 +1,189 @@
-/*
-  canvas.js
-  ---------
-  The ink layer: drawing with pen/eraser, and the mode switch
-  (pen / eraser / move) that decides whether taps go to the ink
-  canvas or to the images/text layer above it.
-*/
+const BASE_WIDTH = 794;
+const BASE_HEIGHT = 1123;
 
-const inkCanvas = document.getElementById('inkCanvas');
-const ctx = inkCanvas.getContext('2d');
-const imagesLayer = document.getElementById('imagesLayer');
+export class PageCanvas {
+  constructor(canvas, page, onChange) {
+    this.canvas = canvas;
+    this.page = page;
+    this.onChange = onChange;
+    this.ctx = canvas.getContext("2d");
+    this.drawing = false;
+    this.currentStroke = null;
+    this.mode = "draw";
+    this.color = "#222222";
+    this.size = 3;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.pointerId = null;
 
-// ---------- Mode: pen / eraser / move ----------
-let mode = 'pen';
-let penColor = document.getElementById('colorPicker').value;
-let penSize = parseInt(document.getElementById('sizeSlider').value, 10);
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(canvas);
+    this.bindEvents();
+    this.resize();
+  }
 
-const penBtn = document.getElementById('penBtn');
-const eraserBtn = document.getElementById('eraserBtn');
-const moveBtn = document.getElementById('moveBtn');
+  bindEvents() {
+    this.canvas.addEventListener("pointerdown", (event) => this.start(event));
+    this.canvas.addEventListener("pointermove", (event) => this.move(event));
+    this.canvas.addEventListener("pointerup", (event) => this.end(event));
+    this.canvas.addEventListener("pointercancel", (event) => this.end(event));
+    this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  }
 
-function setMode(newMode) {
-  mode = newMode;
-  [penBtn, eraserBtn, moveBtn].forEach(b => b.classList.remove('active'));
-  if (mode === 'pen') penBtn.classList.add('active');
-  if (mode === 'eraser') eraserBtn.classList.add('active');
-  if (mode === 'move') moveBtn.classList.add('active');
+  setTool(mode) {
+    this.mode = mode;
+    this.canvas.style.cursor = mode === "erase" ? "cell" : "crosshair";
+  }
 
-  // In Move mode, hand control over to the images/text layer.
-  // In Pen/Eraser mode, hand control back to the ink canvas.
-  if (mode === 'move') {
-    imagesLayer.style.pointerEvents = 'auto';
-    inkCanvas.style.pointerEvents = 'none';
-  } else {
-    imagesLayer.style.pointerEvents = 'none';
-    inkCanvas.style.pointerEvents = 'auto';
-    deselectAllImages();
+  setColor(color) {
+    this.color = color;
+    this.setTool("draw");
+  }
+
+  setSize(size) {
+    this.size = Number(size);
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    this.canvas.width = Math.round(rect.width * dpr);
+    this.canvas.height = Math.round(rect.height * dpr);
+
+    this.ctx.setTransform(
+      (rect.width / BASE_WIDTH) * dpr,
+      0,
+      0,
+      (rect.height / BASE_HEIGHT) * dpr,
+      0,
+      0
+    );
+
+    this.render();
+  }
+
+  getPoint(event) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * BASE_WIDTH,
+      y: ((event.clientY - rect.top) / rect.height) * BASE_HEIGHT,
+      pressure: event.pressure > 0 ? event.pressure : 0.5
+    };
+  }
+
+  start(event) {
+    if (event.button !== undefined && event.button !== 0) return;
+
+    event.preventDefault();
+    this.canvas.setPointerCapture(event.pointerId);
+    this.pointerId = event.pointerId;
+    this.drawing = true;
+
+    this.undoStack.push(structuredClone(this.page.strokes));
+    if (this.undoStack.length > 30) this.undoStack.shift();
+    this.redoStack = [];
+
+    const p = this.getPoint(event);
+    this.currentStroke = {
+      id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      mode: this.mode,
+      color: this.color,
+      size: this.size,
+      points: [p]
+    };
+    this.page.strokes.push(this.currentStroke);
+    this.render();
+  }
+
+  move(event) {
+    if (!this.drawing || event.pointerId !== this.pointerId) return;
+    event.preventDefault();
+
+    const p = this.getPoint(event);
+    const points = this.currentStroke.points;
+    const last = points[points.length - 1];
+
+    if (Math.hypot(p.x - last.x, p.y - last.y) < 1.2) return;
+
+    points.push(p);
+    this.render();
+  }
+
+  end(event) {
+    if (!this.drawing || event.pointerId !== this.pointerId) return;
+
+    this.drawing = false;
+    this.pointerId = null;
+    this.currentStroke = null;
+    this.page.updatedAt = new Date().toISOString();
+    this.onChange?.();
+  }
+
+  drawStroke(stroke) {
+    if (!stroke.points?.length) return;
+
+    this.ctx.save();
+    this.ctx.lineCap = "round";
+    this.ctx.lineJoin = "round";
+    this.ctx.lineWidth = stroke.size || 3;
+
+    if (stroke.mode === "erase") {
+      this.ctx.globalCompositeOperation = "destination-out";
+    } else {
+      this.ctx.globalCompositeOperation = "source-over";
+      this.ctx.strokeStyle = stroke.color || "#222";
+    }
+
+    if (stroke.points.length === 1) {
+      const p = stroke.points[0];
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, (stroke.size || 3) / 2, 0, Math.PI * 2);
+      this.ctx.fillStyle = stroke.mode === "erase" ? "#000" : (stroke.color || "#222");
+      this.ctx.fill();
+      this.ctx.restore();
+      return;
+    }
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+
+    for (let i = 1; i < stroke.points.length; i++) {
+      const p = stroke.points[i];
+      this.ctx.lineTo(p.x, p.y);
+    }
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+  render() {
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = "source-over";
+    this.ctx.clearRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
+    this.ctx.restore();
+
+    for (const stroke of this.page.strokes || []) {
+      this.drawStroke(stroke);
+    }
+  }
+
+  undo() {
+    if (!this.undoStack.length) return;
+    this.redoStack.push(structuredClone(this.page.strokes));
+    this.page.strokes = this.undoStack.pop();
+    this.render();
+    this.onChange?.();
+  }
+
+  redo() {
+    if (!this.redoStack.length) return;
+    this.undoStack.push(structuredClone(this.page.strokes));
+    this.page.strokes = this.redoStack.pop();
+    this.render();
+    this.onChange?.();
+  }
+
+  destroy() {
+    this.resizeObserver.disconnect();
   }
 }
-
-penBtn.addEventListener('click', () => setMode('pen'));
-eraserBtn.addEventListener('click', () => setMode('eraser'));
-moveBtn.addEventListener('click', () => setMode('move'));
-
-document.getElementById('colorPicker').addEventListener('input', e => penColor = e.target.value);
-document.getElementById('sizeSlider').addEventListener('input', e => penSize = parseInt(e.target.value, 10));
-
-document.getElementById('clearBtn').addEventListener('click', () => {
-  if (confirm('Clear this page (ink and images)? This cannot be undone.')) {
-    ctx.clearRect(0, 0, inkCanvas.width, inkCanvas.height);
-    pages[currentPage].images = [];
-    pages[currentPage].texts = [];
-    imagesLayer.innerHTML = '';
-    persistCurrentPage();
-  }
-});
-
-// ---------- Drawing ----------
-let drawing = false;
-let lastX = 0, lastY = 0;
-
-function getPos(e) {
-  const rect = inkCanvas.getBoundingClientRect();
-  const scaleX = inkCanvas.width / rect.width;
-  const scaleY = inkCanvas.height / rect.height;
-  const point = e.touches ? e.touches[0] : e;
-  return {
-    x: (point.clientX - rect.left) * scaleX,
-    y: (point.clientY - rect.top) * scaleY
-  };
-}
-
-function startDraw(e) {
-  if (mode === 'move') return;
-  e.preventDefault();
-  drawing = true;
-  const pos = getPos(e);
-  lastX = pos.x; lastY = pos.y;
-}
-
-function draw(e) {
-  if (!drawing || mode === 'move') return;
-  e.preventDefault();
-  const pos = getPos(e);
-  ctx.strokeStyle = mode === 'eraser' ? '#FAF6EC' : penColor;
-  ctx.lineWidth = mode === 'eraser' ? penSize * 4 : penSize;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(lastX, lastY);
-  ctx.lineTo(pos.x, pos.y);
-  ctx.stroke();
-  lastX = pos.x; lastY = pos.y;
-}
-
-function endDraw() {
-  if (!drawing) return;
-  drawing = false;
-  persistCurrentPage(); // defined in pages.js
-}
-
-inkCanvas.addEventListener('pointerdown', startDraw);
-inkCanvas.addEventListener('pointermove', draw);
-inkCanvas.addEventListener('pointerup', endDraw);
-inkCanvas.addEventListener('pointerleave', endDraw);
