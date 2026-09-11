@@ -1,0 +1,24 @@
+DIGITAL NOTEBOOK — PHASE 4A
+
+IMPORTANT:
+Your existing Phase 3 features are preserved in app.js. This package adds
+optional handwriting selection/conversion UI without removing the notebook,
+folders, notes, pages, pen, eraser, images, scrolling, autosave, etc.
+
+REPLACE:
+1. js/app.js
+2. js/canvas.js
+3. js/pages.js
+4. js/handwriting.js
+
+ADD:
+5. css/phase4-handwriting.css
+   -> add its contents to the bottom of your existing css/styles.css
+
+6. phase4-index-additions.html
+   -> add the button inside your notebook toolbar and the remaining HTML
+      blocks before </body>.
+
+NOTE:
+The actual AI provider is intentionally not connected yet.
+"Convert" will currently report that the provider is not connected.

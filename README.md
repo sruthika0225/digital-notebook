@@ -1,36 +1,39 @@
-# 📓 Digital Notebook
+# Digital Notebook — Phase 4
 
-A lightweight, beginner-friendly digital notebook web app built with vanilla HTML, CSS and JavaScript.
+This package adds the first part of optional handwriting-to-text support.
 
-## Current Phase 3 features
+## Included
 
-- Drawing with mouse, touch and stylus/pointer input
-- Pen size and color controls
-- Eraser
-- Multiple notebook pages
-- Continuous vertical page scrolling
-- New page / Continue section
-- Resume last page and scroll position
-- Paste and upload images
-- Move, resize and delete inserted images
-- Local autosave
-- My Notes home screen
-- Folders
-- Create, rename, move and delete notes
-- Create, rename and delete folders
-- Search notes
-- Git-friendly modular file structure
+- Handwriting selection mode
+- Drag-to-select area on a notebook page
+- Selection preview
+- Conversion modal
+- Provider abstraction in `js/handwriting.js`
 
-## Parked for Phase 4
+## Important
 
-Handwriting-to-text using Tesseract.js is intentionally not included in the active editor. Recognition quality was not good enough for messy handwriting. A better handwriting-capable AI provider will be evaluated in Phase 4.
+The actual handwriting AI provider is intentionally NOT connected yet.
 
-## Current storage
+When the user clicks Convert before a provider is configured, the app will say:
 
-This Phase 3 implementation uses `localStorage` to keep the setup simple. Large image-heavy notebooks can exceed browser storage limits. IndexedDB is planned for the next storage phase.
+"Handwriting AI is not connected yet."
 
-## Run locally
+Normal notebook writing, erasing, images, pages, scrolling and autosave remain unchanged.
 
-Open `index.html` in a modern browser. For best module behavior, use a local server such as VS Code Live Server.
+## Installation
 
-No build step is required.
+Replace these existing files:
+
+- `js/canvas.js`
+- `js/pages.js`
+- `js/handwriting.js`
+
+Add the CSS from:
+
+- `css/phase4-handwriting.css`
+
+Then add the HTML block from:
+
+- `phase4-index-additions.html`
+
+Your existing `app.js` still needs the event wiring for the new button/modal. Because `app.js` is project-specific, the safest next step is to provide the current `app.js` and I can return a complete replacement rather than asking you to find individual lines.

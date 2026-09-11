@@ -6,6 +6,8 @@ export class PageCanvas {
     this.canvas = canvas;
     this.page = page;
     this.onChange = onChange;
+    this.onSelectionChange = null;
+
     this.ctx = canvas.getContext("2d");
     this.drawing = false;
     this.currentStroke = null;
@@ -16,6 +18,11 @@ export class PageCanvas {
     this.redoStack = [];
     this.pointerId = null;
 
+    this.selecting = false;
+    this.selectionStart = null;
+    this.selectionEnd = null;
+    this.selection = null;
+
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.bindEvents();
@@ -23,21 +30,23 @@ export class PageCanvas {
   }
 
   bindEvents() {
-    this.canvas.addEventListener("pointerdown", (event) => this.start(event));
-    this.canvas.addEventListener("pointermove", (event) => this.move(event));
-    this.canvas.addEventListener("pointerup", (event) => this.end(event));
-    this.canvas.addEventListener("pointercancel", (event) => this.end(event));
-    this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+    this.canvas.addEventListener("pointerdown", event => this.start(event));
+    this.canvas.addEventListener("pointermove", event => this.move(event));
+    this.canvas.addEventListener("pointerup", event => this.end(event));
+    this.canvas.addEventListener("pointercancel", event => this.end(event));
+    this.canvas.addEventListener("contextmenu", event => event.preventDefault());
   }
 
   setTool(mode) {
     this.mode = mode;
-    this.canvas.style.cursor = mode === "erase" ? "cell" : "crosshair";
+    this.canvas.style.cursor =
+      mode === "select" ? "crosshair" :
+      mode === "erase" ? "cell" : "crosshair";
   }
 
   setColor(color) {
     this.color = color;
-    this.setTool("draw");
+    if (this.mode !== "select") this.setTool("draw");
   }
 
   setSize(size) {
@@ -65,6 +74,7 @@ export class PageCanvas {
 
   getPoint(event) {
     const rect = this.canvas.getBoundingClientRect();
+
     return {
       x: ((event.clientX - rect.left) / rect.width) * BASE_WIDTH,
       y: ((event.clientY - rect.top) / rect.height) * BASE_HEIGHT,
@@ -78,6 +88,18 @@ export class PageCanvas {
     event.preventDefault();
     this.canvas.setPointerCapture(event.pointerId);
     this.pointerId = event.pointerId;
+
+    if (this.mode === "select") {
+      this.selecting = true;
+      const point = this.getPoint(event);
+      this.selectionStart = point;
+      this.selectionEnd = point;
+      this.selection = null;
+      this.onSelectionChange?.(null);
+      this.render();
+      return;
+    }
+
     this.drawing = true;
 
     this.undoStack.push(structuredClone(this.page.strokes));
@@ -85,6 +107,7 @@ export class PageCanvas {
     this.redoStack = [];
 
     const p = this.getPoint(event);
+
     this.currentStroke = {
       id: `stroke_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       mode: this.mode,
@@ -92,13 +115,22 @@ export class PageCanvas {
       size: this.size,
       points: [p]
     };
+
     this.page.strokes.push(this.currentStroke);
     this.render();
   }
 
   move(event) {
-    if (!this.drawing || event.pointerId !== this.pointerId) return;
+    if (event.pointerId !== this.pointerId) return;
     event.preventDefault();
+
+    if (this.selecting) {
+      this.selectionEnd = this.getPoint(event);
+      this.render();
+      return;
+    }
+
+    if (!this.drawing) return;
 
     const p = this.getPoint(event);
     const points = this.currentStroke.points;
@@ -111,7 +143,22 @@ export class PageCanvas {
   }
 
   end(event) {
-    if (!this.drawing || event.pointerId !== this.pointerId) return;
+    if (event.pointerId !== this.pointerId) return;
+
+    if (this.selecting) {
+      this.selecting = false;
+      this.selectionEnd = this.getPoint(event);
+      this.selection = this.normalizeSelection(
+        this.selectionStart,
+        this.selectionEnd
+      );
+      this.pointerId = null;
+      this.render();
+      this.onSelectionChange?.(this.selection);
+      return;
+    }
+
+    if (!this.drawing) return;
 
     this.drawing = false;
     this.pointerId = null;
@@ -120,40 +167,118 @@ export class PageCanvas {
     this.onChange?.();
   }
 
-  drawStroke(stroke) {
-    if (!stroke.points?.length) return;
+  normalizeSelection(start, end) {
+    if (!start || !end) return null;
+
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const width = Math.abs(end.x - start.x);
+    const height = Math.abs(end.y - start.y);
+
+    if (width < 10 || height < 10) return null;
+
+    return { x, y, width, height };
+  }
+
+  drawSelection() {
+    if (!this.selection) return;
+
+    const { x, y, width, height } = this.selection;
 
     this.ctx.save();
-    this.ctx.lineCap = "round";
-    this.ctx.lineJoin = "round";
-    this.ctx.lineWidth = stroke.size || 3;
+    this.ctx.fillStyle = "rgba(70, 130, 180, 0.10)";
+    this.ctx.fillRect(x, y, width, height);
+    this.ctx.strokeStyle = "#4f7cac";
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([7, 5]);
+    this.ctx.strokeRect(x, y, width, height);
+    this.ctx.restore();
+  }
+
+  getSelection() {
+    return this.selection ? { ...this.selection } : null;
+  }
+
+  clearSelection() {
+    this.selection = null;
+    this.selectionStart = null;
+    this.selectionEnd = null;
+    this.onSelectionChange?.(null);
+    this.render();
+  }
+
+  hasSelection() {
+    return !!this.selection;
+  }
+
+  exportSelection() {
+    if (!this.selection) return null;
+
+    const { x, y, width, height } = this.selection;
+    const scale = 2;
+
+    const output = document.createElement("canvas");
+    output.width = Math.ceil(width * scale);
+    output.height = Math.ceil(height * scale);
+
+    const outputCtx = output.getContext("2d");
+    outputCtx.fillStyle = "#ffffff";
+    outputCtx.fillRect(0, 0, output.width, output.height);
+
+    outputCtx.save();
+    outputCtx.scale(scale, scale);
+    outputCtx.translate(-x, -y);
+
+    for (const stroke of this.page.strokes || []) {
+      this.drawStrokeToContext(outputCtx, stroke);
+    }
+
+    outputCtx.restore();
+
+    return output.toDataURL("image/png");
+  }
+
+  drawStrokeToContext(ctx, stroke) {
+    if (!stroke.points?.length) return;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = stroke.size || 3;
 
     if (stroke.mode === "erase") {
-      this.ctx.globalCompositeOperation = "destination-out";
+      ctx.globalCompositeOperation = "destination-out";
     } else {
-      this.ctx.globalCompositeOperation = "source-over";
-      this.ctx.strokeStyle = stroke.color || "#222";
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = stroke.color || "#222";
     }
 
     if (stroke.points.length === 1) {
       const p = stroke.points[0];
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, (stroke.size || 3) / 2, 0, Math.PI * 2);
-      this.ctx.fillStyle = stroke.mode === "erase" ? "#000" : (stroke.color || "#222");
-      this.ctx.fill();
-      this.ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, (stroke.size || 3) / 2, 0, Math.PI * 2);
+      ctx.fillStyle =
+        stroke.mode === "erase" ? "#000" : stroke.color || "#222";
+      ctx.fill();
+      ctx.restore();
       return;
     }
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+    ctx.beginPath();
+    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
 
     for (let i = 1; i < stroke.points.length; i++) {
       const p = stroke.points[i];
-      this.ctx.lineTo(p.x, p.y);
+      ctx.lineTo(p.x, p.y);
     }
-    this.ctx.stroke();
-    this.ctx.restore();
+
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawStroke(stroke) {
+    this.drawStrokeToContext(this.ctx, stroke);
   }
 
   render() {
@@ -165,10 +290,13 @@ export class PageCanvas {
     for (const stroke of this.page.strokes || []) {
       this.drawStroke(stroke);
     }
+
+    this.drawSelection();
   }
 
   undo() {
     if (!this.undoStack.length) return;
+
     this.redoStack.push(structuredClone(this.page.strokes));
     this.page.strokes = this.undoStack.pop();
     this.render();
@@ -177,6 +305,7 @@ export class PageCanvas {
 
   redo() {
     if (!this.redoStack.length) return;
+
     this.undoStack.push(structuredClone(this.page.strokes));
     this.page.strokes = this.redoStack.pop();
     this.render();

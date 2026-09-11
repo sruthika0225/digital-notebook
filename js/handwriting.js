@@ -1,12 +1,47 @@
-// Handwriting recognition is intentionally parked for now.
-// Tesseract.js did not meet the quality target for messy handwriting.
-// Phase 4 will replace this with a better handwriting-capable AI provider.
-//
-// Keeping this file means app.js can stay stable when the AI feature returns.
+/*
+ * Handwriting AI
+ *
+ * Phase 4
+ *
+ * Conversion is optional and only happens
+ * when the user explicitly requests it.
+ */
+
+let provider = null;
+
+export function setHandwritingProvider(newProvider) {
+  provider = newProvider;
+}
 
 export function handwritingStatus() {
   return {
-    enabled: false,
-    message: "Handwriting-to-text is parked for Phase 4."
+    enabled: typeof provider === "function",
+    message:
+      typeof provider === "function"
+        ? "Handwriting AI is ready."
+        : "Handwriting AI provider is not configured yet."
   };
+}
+
+export async function convertHandwriting(imageData) {
+  if (!imageData) {
+    throw new Error("No handwriting was selected.");
+  }
+
+  if (typeof provider !== "function") {
+    throw new Error("Handwriting AI is not connected yet.");
+  }
+
+  try {
+    const text = await provider(imageData);
+
+    if (typeof text !== "string") {
+      throw new Error("The handwriting provider returned an invalid response.");
+    }
+
+    return text.trim();
+  } catch (error) {
+    console.error("Handwriting conversion failed:", error);
+    throw new Error("Could not convert the handwriting. Please try again.");
+  }
 }

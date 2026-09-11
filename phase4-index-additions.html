@@ -1,0 +1,82 @@
+
+<!-- ADD THIS BUTTON INSIDE YOUR EXISTING NOTEBOOK TOOLBAR -->
+<button
+  id="convertTextBtn"
+  type="button"
+  title="Select handwriting and convert it to text"
+>
+  📝 Convert to Text
+</button>
+
+<!-- ADD THIS BEFORE </body> -->
+
+<div id="handwritingModal" class="handwriting-modal hidden">
+  <div class="handwriting-modal-card">
+
+    <div class="handwriting-modal-header">
+      <h2>📝 Convert Handwriting</h2>
+
+      <button
+        id="closeHandwritingModal"
+        type="button"
+        class="modal-close-btn"
+      >
+        ×
+      </button>
+    </div>
+
+    <p id="handwritingModalMessage" class="handwriting-modal-message">
+      Select an area of handwriting first.
+    </p>
+
+    <div id="handwritingPreview" class="handwriting-preview">
+      <span>Your handwriting preview will appear here.</span>
+    </div>
+
+    <textarea
+      id="handwritingResult"
+      class="handwriting-result hidden"
+      placeholder="Recognized text will appear here..."
+    ></textarea>
+
+    <div id="handwritingLoading" class="handwriting-loading hidden">
+      <span class="loading-spinner"></span>
+      Converting handwriting...
+    </div>
+
+    <div class="handwriting-modal-actions">
+      <button
+        id="cancelHandwritingBtn"
+        type="button"
+        class="secondary-btn"
+      >
+        Cancel
+      </button>
+
+      <button
+        id="convertSelectedBtn"
+        type="button"
+        class="primary-btn"
+      >
+        Convert
+      </button>
+
+      <button
+        id="insertHandwritingTextBtn"
+        type="button"
+        class="primary-btn hidden"
+      >
+        Insert Text
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<button
+  id="selectionConvertBtn"
+  class="selection-convert-btn hidden"
+  type="button"
+>
+  📝 Convert Selection
+</button>
