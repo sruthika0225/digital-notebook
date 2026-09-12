@@ -510,10 +510,21 @@ export class NotebookEditor {
       const startLeft = textData.x;
       const startTop = textData.y;
 
+      // Track whether this turns into a real drag. A plain tap (no
+      // movement) should focus the box for editing instead — since
+      // preventDefault() above blocks the browser's normal
+      // click-to-focus behavior, we have to do that focus manually.
+      let moved = false;
+      const DRAG_THRESHOLD = 4;
+
       const onMove = (moveEvent) => {
         const dx = moveEvent.clientX - startX;
 
         const dy = moveEvent.clientY - startY;
+
+        if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+          moved = true;
+        }
 
         const scaleX = BASE_WIDTH / wrapperRect.width;
 
@@ -544,6 +555,12 @@ export class NotebookEditor {
         window.removeEventListener("pointermove", onMove);
 
         window.removeEventListener("pointerup", onUp);
+
+        if (!moved) {
+          // It was just a tap, not a drag — focus it so it can be edited.
+          textBox.focus();
+          return;
+        }
 
         touch(page);
         touch(this.note);
@@ -667,6 +684,15 @@ export class NotebookEditor {
   updateTypeMode() {
     this.container.querySelectorAll(".page-wrapper").forEach((wrapper) => {
       wrapper.classList.toggle("typing-mode", this.tool === "type");
+
+      // Keep the text layer's pointer-events in sync with the tool.
+      // Without this, pages that were already rendered before you
+      // switched to "type" stay stuck at pointer-events: none forever,
+      // which blocks editing, resizing, and moving existing text boxes.
+      const textLayer = wrapper.querySelector(".page-text-layer");
+      if (textLayer) {
+        textLayer.style.pointerEvents = this.tool === "type" ? "auto" : "none";
+      }
     });
   }
 
