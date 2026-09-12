@@ -96,10 +96,17 @@ export class NotebookEditor {
       page.images = [];
     }
 
-    // New data structure for typed text.
+    // Typed text layer
     if (!Array.isArray(page.texts)) {
       page.texts = [];
     }
+
+    // Make older text objects compatible with resizing.
+    page.texts.forEach((text) => {
+      if (!Number.isFinite(text.width)) {
+        text.width = 260;
+      }
+    });
   }
 
   renderPage(page, index) {
@@ -108,6 +115,10 @@ export class NotebookEditor {
     const wrapper = document.createElement("article");
     wrapper.className = "page-wrapper";
     wrapper.dataset.pageId = page.id;
+
+    // --------------------------------------------------
+    // PAGE CONTROLS
+    // --------------------------------------------------
 
     const pageControls = document.createElement("div");
     pageControls.className = "page-controls";
@@ -128,6 +139,10 @@ export class NotebookEditor {
     });
 
     pageControls.append(label, deleteBtn);
+
+    // --------------------------------------------------
+    // CANVAS
+    // --------------------------------------------------
 
     const canvas = document.createElement("canvas");
     canvas.className = "page-canvas";
@@ -172,7 +187,7 @@ export class NotebookEditor {
     this.container.appendChild(wrapper);
 
     // --------------------------------------------------
-    // CANVAS
+    // CANVAS CONTROLLER
     // --------------------------------------------------
 
     const controller = new PageCanvas(canvas, page, () => {
@@ -216,7 +231,6 @@ export class NotebookEditor {
     this.renderTextLayer(wrapper, textLayer, page);
 
     wrapper.classList.toggle("adjust-mode", this.tool === "adjust");
-
     wrapper.classList.toggle("write-mode", this.tool !== "adjust");
 
     // --------------------------------------------------
@@ -268,7 +282,6 @@ export class NotebookEditor {
       const rect = wrapper.getBoundingClientRect();
 
       const x = event.clientX - rect.left;
-
       const y = event.clientY - rect.top;
 
       this.createTextBox(page, textLayer, x, y);
@@ -288,42 +301,87 @@ export class NotebookEditor {
   }
 
   createTextElement(page, textLayer, textData) {
+    // --------------------------------------------------
+    // TEXT BOX WRAPPER
+    // --------------------------------------------------
+
     const textBox = document.createElement("div");
 
     textBox.className = "typed-text";
 
+    // IMPORTANT:
+    // Only the actual text box is editable.
     textBox.contentEditable = "true";
     textBox.spellcheck = true;
 
     textBox.textContent = textData.text || "";
 
+    // Older text objects may not have width.
+    if (!Number.isFinite(textData.width)) {
+      textData.width = 260;
+    }
+
     Object.assign(textBox.style, {
       position: "absolute",
+
       left: `${textData.x}px`,
       top: `${textData.y}px`,
+
+      width: `${textData.width}px`,
+
       minWidth: "120px",
       maxWidth: "650px",
+
       minHeight: "32px",
+
       padding: "4px 6px",
+
+      fontFamily: "Arial, Helvetica, sans-serif",
       fontSize: `${textData.fontSize || 22}px`,
       lineHeight: "1.35",
+
       color: textData.color || "#222222",
+
       background: "transparent",
+
       border: "1px solid transparent",
+
       outline: "none",
+
       zIndex: "20",
+
+      boxSizing: "border-box",
+
+      // IMPORTANT TEXT LAYOUT FIX
+      display: "block",
       whiteSpace: "pre-wrap",
-      wordBreak: "break-word",
+      wordBreak: "normal",
+      overflowWrap: "break-word",
+      overflow: "visible",
+
+      textAlign: "left",
+
+      writingMode: "horizontal-tb",
+
+      direction: "ltr",
     });
 
-    // Show a border while editing.
+    // --------------------------------------------------
+    // FOCUS
+    // --------------------------------------------------
+
     textBox.addEventListener("focus", () => {
       textBox.style.border = "1px dashed #aaa";
       textBox.style.background = "rgba(255,255,255,.45)";
     });
 
+    // --------------------------------------------------
+    // BLUR / SAVE TEXT
+    // --------------------------------------------------
+
     textBox.addEventListener("blur", () => {
       textBox.style.border = "1px solid transparent";
+
       textBox.style.background = "transparent";
 
       textData.text = textBox.textContent || "";
@@ -333,12 +391,19 @@ export class NotebookEditor {
         page.texts = page.texts.filter((item) => item.id !== textData.id);
 
         textBox.remove();
+
+        resizeHandle.remove();
       }
 
       touch(page);
       touch(this.note);
+
       this.onChange?.();
     });
+
+    // --------------------------------------------------
+    // TEXT INPUT
+    // --------------------------------------------------
 
     textBox.addEventListener("input", () => {
       textData.text = textBox.textContent || "";
@@ -349,57 +414,200 @@ export class NotebookEditor {
       this.onChange?.(true);
     });
 
-    // Prevent notebook click handler from creating another box.
+    // --------------------------------------------------
+    // CLICK
+    // --------------------------------------------------
+
     textBox.addEventListener("click", (event) => {
       event.stopPropagation();
     });
 
-    // Allow normal typing shortcuts.
+    // --------------------------------------------------
+    // KEYBOARD
+    // --------------------------------------------------
+
     textBox.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         textBox.blur();
       }
     });
 
+    // --------------------------------------------------
+    // MOVE TEXT BOX
+    // --------------------------------------------------
+
+    textBox.addEventListener("pointerdown", (event) => {
+      if (this.tool !== "type") return;
+
+      // Don't move while editing.
+      if (document.activeElement === textBox) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const wrapper = textBox.closest(".page-wrapper");
+
+      if (!wrapper) return;
+
+      const wrapperRect = wrapper.getBoundingClientRect();
+
+      const startX = event.clientX;
+      const startY = event.clientY;
+
+      const startLeft = textData.x;
+      const startTop = textData.y;
+
+      const onMove = (moveEvent) => {
+        const dx = moveEvent.clientX - startX;
+
+        const dy = moveEvent.clientY - startY;
+
+        const scaleX = BASE_WIDTH / wrapperRect.width;
+
+        const scaleY = BASE_HEIGHT / wrapperRect.height;
+
+        const newX = startLeft + dx * scaleX;
+
+        const newY = startTop + dy * scaleY;
+
+        textData.x = Math.max(
+          10,
+          Math.min(BASE_WIDTH - textData.width - 10, newX),
+        );
+
+        textData.y = Math.max(45, Math.min(BASE_HEIGHT - 40, newY));
+
+        textBox.style.left = `${textData.x}px`;
+
+        textBox.style.top = `${textData.y}px`;
+
+        // Keep resize handle attached.
+        resizeHandle.style.left = `${textData.x + textData.width - 6}px`;
+
+        resizeHandle.style.top = `${textData.y + textBox.offsetHeight - 6}px`;
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+
+        window.removeEventListener("pointerup", onUp);
+
+        touch(page);
+        touch(this.note);
+
+        this.onChange?.();
+      };
+
+      window.addEventListener("pointermove", onMove);
+
+      window.addEventListener("pointerup", onUp);
+    });
+
+    // --------------------------------------------------
+    // RESIZE HANDLE
+    // --------------------------------------------------
+
+    const resizeHandle = document.createElement("div");
+
+    resizeHandle.className = "typed-text-resize";
+
+    resizeHandle.title = "Resize text box";
+
+    Object.assign(resizeHandle.style, {
+      position: "absolute",
+
+      width: "12px",
+      height: "12px",
+
+      background: "white",
+
+      border: "1px solid #777",
+
+      borderRadius: "2px",
+
+      cursor: "nwse-resize",
+
+      zIndex: "25",
+
+      display: "none",
+    });
+
+    // Add BOTH elements to the text layer.
     textLayer.appendChild(textBox);
+    textLayer.appendChild(resizeHandle);
 
-    return textBox;
-  }
+    // --------------------------------------------------
+    // SHOW HANDLE WHEN TEXT IS SELECTED
+    // --------------------------------------------------
 
-  createTextBox(page, textLayer, x, y) {
-    const textData = {
-      id: `text_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    textBox.addEventListener("focus", () => {
+      resizeHandle.style.display = "block";
 
-      x: Math.max(10, x),
-      y: Math.max(45, y),
+      positionResizeHandle();
+    });
 
-      text: "",
+    textBox.addEventListener("blur", () => {
+      resizeHandle.style.display = "none";
+    });
 
-      fontSize: 22,
+    function positionResizeHandle() {
+      resizeHandle.style.left = `${textData.x + textData.width - 6}px`;
 
-      color: "#222222",
-    };
+      resizeHandle.style.top = `${textData.y + textBox.offsetHeight - 6}px`;
+    }
 
-    page.texts.push(textData);
+    // --------------------------------------------------
+    // RESIZE
+    // --------------------------------------------------
 
-    const textBox = this.createTextElement(page, textLayer, textData);
+    resizeHandle.addEventListener("pointerdown", (event) => {
+      if (this.tool !== "type") {
+        return;
+      }
 
-    touch(page);
-    touch(this.note);
-    this.onChange?.();
+      event.preventDefault();
+      event.stopPropagation();
 
-    requestAnimationFrame(() => {
-      textBox.focus();
+      const wrapper = textBox.closest(".page-wrapper");
 
-      // Put cursor inside the text box.
-      const selection = window.getSelection();
-      const range = document.createRange();
+      if (!wrapper) return;
 
-      range.selectNodeContents(textBox);
-      range.collapse(false);
+      const wrapperRect = wrapper.getBoundingClientRect();
 
-      selection.removeAllRanges();
-      selection.addRange(range);
+      const startX = event.clientX;
+
+      const startWidth = textData.width;
+
+      const onMove = (moveEvent) => {
+        const dx = moveEvent.clientX - startX;
+
+        const scaleX = BASE_WIDTH / wrapperRect.width;
+
+        const newWidth = startWidth + dx * scaleX;
+
+        textData.width = Math.max(120, Math.min(650, newWidth));
+
+        textBox.style.width = `${textData.width}px`;
+
+        positionResizeHandle();
+      };
+
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+
+        window.removeEventListener("pointerup", onUp);
+
+        touch(page);
+        touch(this.note);
+
+        this.onChange?.();
+      };
+
+      window.addEventListener("pointermove", onMove);
+
+      window.addEventListener("pointerup", onUp);
     });
 
     return textBox;
@@ -421,6 +629,7 @@ export class NotebookEditor {
     this.ensurePageData(page);
 
     this.note.pages.push(page);
+
     this.note.lastPageId = page.id;
 
     touch(this.note);
@@ -460,6 +669,7 @@ export class NotebookEditor {
     const observer = this.pageObservers.get(pageId);
 
     observer?.disconnect();
+
     this.pageObservers.delete(pageId);
 
     this.pageControllers.get(pageId)?.destroy();
@@ -518,6 +728,7 @@ export class NotebookEditor {
     }
 
     touch(this.note);
+
     this.onChange?.(false);
   }
 

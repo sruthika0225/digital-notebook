@@ -1,6 +1,7 @@
 import {
   loadState,
   saveState,
+  loadStateFromIndexedDB,
   createNote,
   createFolder,
   touch,
@@ -8,7 +9,7 @@ import {
 
 import { NotebookEditor } from "./pages.js";
 
-const state = loadState();
+let state = loadState();
 
 const els = {
   home: document.getElementById("notesHome"),
@@ -775,8 +776,53 @@ window.addEventListener("beforeunload", () => {
 });
 
 // ======================================================
+// RESTORE FROM INDEXEDDB
+// ======================================================
+
+async function restoreFromIndexedDB() {
+  try {
+    const indexedDBState = await loadStateFromIndexedDB();
+
+    if (
+      !indexedDBState ||
+      !Array.isArray(indexedDBState.notes) ||
+      !Array.isArray(indexedDBState.folders)
+    ) {
+      return;
+    }
+
+    const localLatestTime = Math.max(
+      0,
+      ...state.notes.map((note) => new Date(note.updatedAt || 0).getTime()),
+    );
+
+    const indexedDBLatestTime = Math.max(
+      0,
+      ...indexedDBState.notes.map((note) =>
+        new Date(note.updatedAt || 0).getTime(),
+      ),
+    );
+
+    if (indexedDBLatestTime > localLatestTime) {
+      state = indexedDBState;
+
+      renderHome();
+
+      setStatus("Restored from IndexedDB");
+
+      console.log("Notebook restored from IndexedDB.");
+    }
+  } catch (error) {
+    console.warn("IndexedDB restore skipped:", error);
+  }
+}
+
+// ======================================================
 // START
 // ======================================================
 
 renderHome();
 updateToolButtons();
+
+// Restore a newer copy from IndexedDB in the background.
+restoreFromIndexedDB();

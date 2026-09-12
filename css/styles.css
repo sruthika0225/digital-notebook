@@ -286,6 +286,7 @@ h1 {
 }
 
 /* Editor */
+
 .editor-head {
   align-items: center;
   margin-bottom: 14px;
@@ -349,15 +350,27 @@ h1 {
   gap: 26px;
 }
 
+/* =====================================================
+   NOTEBOOK PAGE
+   ===================================================== */
+
 .page-wrapper {
   position: relative;
   width: 100%;
   aspect-ratio: 794 / 1123;
-  background: var(--paper);
+
+  background-color: var(--paper);
+
+  /* Grid paper */
+  background-image:
+    linear-gradient(to right, rgba(150, 170, 190, 0.22) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(150, 170, 190, 0.22) 1px, transparent 1px);
+
+  background-size: 28px 28px;
+
   border: 1px solid #d8d0c1;
   box-shadow: var(--shadow);
   overflow: hidden;
-  touch-action: pan-y;
 }
 
 .page-controls {
@@ -397,6 +410,7 @@ h1 {
 
 /* In Write mode the canvas sits above images, so handwriting can be drawn over them.
    In Adjust mode the image layer sits above the canvas so images can be moved/resized. */
+
 .page-wrapper.write-mode .page-canvas {
   z-index: 11;
   pointer-events: auto;
@@ -489,6 +503,7 @@ h1 {
 }
 
 /* Modal */
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -534,44 +549,9 @@ h1 {
   gap: 9px;
 }
 
-@media (max-width: 700px) {
-  .screen {
-    width: min(100% - 18px, 900px);
-    padding-top: 24px;
-  }
-  .home-head,
-  .editor-head {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .home-actions,
-  .editor-actions {
-    width: 100%;
-  }
-  .home-actions button,
-  .editor-actions button {
-    flex: 1;
-  }
-  .toolbar {
-    top: 62px;
-  }
-  .notebook-pages {
-    gap: 14px;
-  }
-  .page-wrapper {
-    box-shadow: 0 5px 16px rgba(55, 45, 30, 0.09);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    scroll-behavior: auto !important;
-    transition: none !important;
-  }
-}
-/* =========================================
+/* =====================================================
    HANDWRITING → TEXT
-   ========================================= */
+   ===================================================== */
 
 .handwriting-modal {
   position: fixed;
@@ -793,9 +773,6 @@ h1 {
   background: #eae3d7;
 }
 
-.hidden {
-  display: none !important;
-}
 /* =====================================================
    TYPED TEXT
    ===================================================== */
@@ -803,7 +780,9 @@ h1 {
 .page-text-layer {
   position: absolute;
   inset: 0;
+
   pointer-events: none;
+
   z-index: 15;
 }
 
@@ -811,36 +790,53 @@ h1 {
   pointer-events: auto;
 }
 
-.typed-text {
-  font-family: Arial, Helvetica, sans-serif;
-
-  cursor: text;
+..typed-text {
   pointer-events: auto;
-
+  cursor: text;
+  border-radius: 4px;
+  font-family: Arial, Helvetica, sans-serif;
   box-sizing: border-box;
 
-  border-radius: 4px;
-
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+  display: block;
+  white-space: pre-wrap;
+  word-break: normal;
+  overflow-wrap: break-word;
+  writing-mode: horizontal-tb;
+  direction: ltr;
+  text-align: left;
 }
 
 .typed-text:focus {
-  border: 1px dashed #aaa !important;
+  border: 1px dashed #999 !important;
 
   background: rgba(255, 255, 255, 0.55) !important;
 }
 
-.page-wrapper.typing-mode .typed-text {
-  cursor: text;
+/* Resize handle */
+
+.typed-text-resize {
+  position: absolute;
+
+  right: -6px;
+  bottom: -6px;
+
+  width: 12px;
+  height: 12px;
+
+  background: white;
+
+  border: 1px solid #777;
+
+  border-radius: 2px;
+
+  cursor: nwse-resize;
+
+  display: none;
 }
 
-.page-wrapper:not(.typing-mode) .typed-text {
-  pointer-events: auto;
+.typed-text:focus .typed-text-resize {
+  display: block;
 }
-
-/* Type toolbar button */
 
 #typeBtn {
   white-space: nowrap;
@@ -848,4 +844,50 @@ h1 {
 
 #typeBtn.active {
   font-weight: 600;
+}
+
+/* =====================================================
+   MOBILE
+   ===================================================== */
+
+@media (max-width: 700px) {
+  .screen {
+    width: min(100% - 18px, 900px);
+    padding-top: 24px;
+  }
+
+  .home-head,
+  .editor-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .home-actions,
+  .editor-actions {
+    width: 100%;
+  }
+
+  .home-actions button,
+  .editor-actions button {
+    flex: 1;
+  }
+
+  .toolbar {
+    top: 62px;
+  }
+
+  .notebook-pages {
+    gap: 14px;
+  }
+
+  .page-wrapper {
+    box-shadow: 0 5px 16px rgba(55, 45, 30, 0.09);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
 }
