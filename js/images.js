@@ -22,21 +22,50 @@ function getNaturalSize(src) {
   });
 }
 
+async function compressImage(src, width, height) {
+  const img = new Image();
+
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+    img.src = src;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width);
+  canvas.height = Math.round(height);
+
+  const context = canvas.getContext("2d");
+  context.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  return canvas.toDataURL("image/jpeg", 0.82);
+}
+
 export async function fileToImageRecord(file) {
   const src = await readAsDataURL(file);
   const natural = await getNaturalSize(src);
-  const maxWidth = 360;
+
+  const maxWidth = 1200;
   const scale = Math.min(1, maxWidth / Math.max(1, natural.width));
+
+  const compressedSrc = await compressImage(
+    src,
+    natural.width * scale,
+    natural.height * scale,
+  );
+
+  const displayWidth = Math.min(360, natural.width * scale);
+  const displayScale = displayWidth / Math.max(1, natural.width);
 
   return {
     id: createId("img"),
-    src,
+    src: compressedSrc,
     originalWidth: natural.width,
     originalHeight: natural.height,
     x: 55,
     y: 80,
-    width: Math.max(80, natural.width * scale),
-    height: Math.max(60, natural.height * scale),
+    width: Math.max(80, natural.width * displayScale),
+    height: Math.max(60, natural.height * displayScale),
     rotation: 0,
   };
 }
