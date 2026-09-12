@@ -15,7 +15,8 @@ function readAsDataURL(file) {
 function getNaturalSize(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onload = () =>
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
     img.onerror = reject;
     img.src = src;
   });
@@ -30,11 +31,13 @@ export async function fileToImageRecord(file) {
   return {
     id: createId("img"),
     src,
+    originalWidth: natural.width,
+    originalHeight: natural.height,
     x: 55,
     y: 80,
     width: Math.max(80, natural.width * scale),
     height: Math.max(60, natural.height * scale),
-    rotation: 0
+    rotation: 0,
   };
 }
 
@@ -48,10 +51,10 @@ export async function clipboardToImageRecord(clipboardItems) {
 }
 
 function positionElement(el, image) {
-  el.style.left = `${image.x / BASE_WIDTH * 100}%`;
-  el.style.top = `${image.y / BASE_HEIGHT * 100}%`;
-  el.style.width = `${image.width / BASE_WIDTH * 100}%`;
-  el.style.height = `${image.height / BASE_HEIGHT * 100}%`;
+  el.style.left = `${(image.x / BASE_WIDTH) * 100}%`;
+  el.style.top = `${(image.y / BASE_HEIGHT) * 100}%`;
+  el.style.width = `${(image.width / BASE_WIDTH) * 100}%`;
+  el.style.height = `${(image.height / BASE_HEIGHT) * 100}%`;
   el.style.transform = `rotate(${image.rotation || 0}deg)`;
 }
 
@@ -64,20 +67,27 @@ export function renderImageLayer(wrapper, page, onChange) {
     position: "absolute",
     inset: "0",
     zIndex: "10",
-    pointerEvents: "auto"
+    pointerEvents: "auto",
   });
 
   for (const image of page.images || []) {
+    if (!image.originalWidth) {
+      image.originalWidth = image.width;
+    }
+
+    if (!image.originalHeight) {
+      image.originalHeight = image.height;
+    }
     const item = document.createElement("div");
     item.className = "image-item";
     item.dataset.imageId = image.id;
     Object.assign(item.style, {
       position: "absolute",
-      left: `${image.x / BASE_WIDTH * 100}%`,
-      top: `${image.y / BASE_HEIGHT * 100}%`,
-      width: `${image.width / BASE_WIDTH * 100}%`,
-      height: `${image.height / BASE_HEIGHT * 100}%`,
-      pointerEvents: "auto"
+      left: `${(image.x / BASE_WIDTH) * 100}%`,
+      top: `${(image.y / BASE_HEIGHT) * 100}%`,
+      width: `${(image.width / BASE_WIDTH) * 100}%`,
+      height: `${(image.height / BASE_HEIGHT) * 100}%`,
+      pointerEvents: "auto",
     });
 
     const img = document.createElement("img");
@@ -111,7 +121,7 @@ export function renderImageLayer(wrapper, page, onChange) {
     let resize = null;
     const aspect = Math.max(0.1, image.height / Math.max(1, image.width));
 
-    const select = value => {
+    const select = (value) => {
       selected = value;
       item.classList.toggle("selected", value);
       deleteBtn.hidden = !value;
@@ -119,7 +129,7 @@ export function renderImageLayer(wrapper, page, onChange) {
       info.hidden = !value;
     };
 
-    img.addEventListener("pointerdown", event => {
+    img.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       event.stopPropagation();
       select(true);
@@ -131,25 +141,31 @@ export function renderImageLayer(wrapper, page, onChange) {
         x: image.x,
         y: image.y,
         scaleX: BASE_WIDTH / rect.width,
-        scaleY: BASE_HEIGHT / rect.height
+        scaleY: BASE_HEIGHT / rect.height,
       };
       img.setPointerCapture(event.pointerId);
     });
 
-    img.addEventListener("pointermove", event => {
+    img.addEventListener("pointermove", (event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
-      image.x = Math.max(0, drag.x + (event.clientX - drag.startX) * drag.scaleX);
-      image.y = Math.max(0, drag.y + (event.clientY - drag.startY) * drag.scaleY);
+      image.x = Math.max(
+        0,
+        drag.x + (event.clientX - drag.startX) * drag.scaleX,
+      );
+      image.y = Math.max(
+        0,
+        drag.y + (event.clientY - drag.startY) * drag.scaleY,
+      );
       positionElement(item, image);
     });
 
-    img.addEventListener("pointerup", event => {
+    img.addEventListener("pointerup", (event) => {
       if (!drag || event.pointerId !== drag.pointerId) return;
       drag = null;
       onChange?.();
     });
 
-    resizeHandle.addEventListener("pointerdown", event => {
+    resizeHandle.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       event.stopPropagation();
       const rect = wrapper.getBoundingClientRect();
@@ -158,12 +174,12 @@ export function renderImageLayer(wrapper, page, onChange) {
         startX: event.clientX,
         startWidth: image.width,
         startHeight: image.height,
-        scaleX: BASE_WIDTH / rect.width
+        scaleX: BASE_WIDTH / rect.width,
       };
       resizeHandle.setPointerCapture(event.pointerId);
     });
 
-    resizeHandle.addEventListener("pointermove", event => {
+    resizeHandle.addEventListener("pointermove", (event) => {
       if (!resize || event.pointerId !== resize.pointerId) return;
       // Dragging the bottom-right handle right/down enlarges the image;
       // dragging left/up shrinks it.
@@ -174,20 +190,20 @@ export function renderImageLayer(wrapper, page, onChange) {
       positionElement(item, image);
     });
 
-    resizeHandle.addEventListener("pointerup", event => {
+    resizeHandle.addEventListener("pointerup", (event) => {
       if (!resize || event.pointerId !== resize.pointerId) return;
       resize = null;
       onChange?.();
     });
 
-    deleteBtn.addEventListener("click", event => {
+    deleteBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      page.images = page.images.filter(x => x.id !== image.id);
+      page.images = page.images.filter((x) => x.id !== image.id);
       onChange?.();
       renderImageLayer(wrapper, page, onChange);
     });
 
-    item.addEventListener("pointerdown", event => {
+    item.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
       select(true);
     });
@@ -198,16 +214,23 @@ export function renderImageLayer(wrapper, page, onChange) {
 
   wrapper.appendChild(layer);
 
-  wrapper.addEventListener("pointerdown", event => {
-    if (event.target === wrapper || event.target.classList.contains("page-canvas")) {
-      layer.querySelectorAll(".image-item.selected").forEach(el => {
-        el.classList.remove("selected");
-        el.querySelector(".image-delete").hidden = true;
-        el.querySelector(".image-resize").hidden = true;
-        el.querySelector(".image-tools").hidden = true;
-      });
-    }
-  }, { once: true });
+  wrapper.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (
+        event.target === wrapper ||
+        event.target.classList.contains("page-canvas")
+      ) {
+        layer.querySelectorAll(".image-item.selected").forEach((el) => {
+          el.classList.remove("selected");
+          el.querySelector(".image-delete").hidden = true;
+          el.querySelector(".image-resize").hidden = true;
+          el.querySelector(".image-tools").hidden = true;
+        });
+      }
+    },
+    { once: true },
+  );
 }
 
 export function setupImageInput({ wrapper, page, onChange }) {
