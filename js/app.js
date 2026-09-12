@@ -775,7 +775,7 @@ window.addEventListener("beforeunload", () => {
   persistNow();
 });
 
-// ======================================================
+/// ======================================================
 // RESTORE FROM INDEXEDDB
 // ======================================================
 
@@ -788,6 +788,7 @@ async function restoreFromIndexedDB() {
       !Array.isArray(indexedDBState.notes) ||
       !Array.isArray(indexedDBState.folders)
     ) {
+      console.log("No IndexedDB backup found.");
       return;
     }
 
@@ -803,14 +804,24 @@ async function restoreFromIndexedDB() {
       ),
     );
 
-    if (indexedDBLatestTime > localLatestTime) {
+    const indexedDBHasMoreNotes =
+      indexedDBState.notes.length > state.notes.length;
+
+    const indexedDBIsNewer = indexedDBLatestTime > localLatestTime;
+
+    if (indexedDBHasMoreNotes || indexedDBIsNewer) {
       state = indexedDBState;
 
+      saveState(state);
       renderHome();
 
       setStatus("Restored from IndexedDB");
 
       console.log("Notebook restored from IndexedDB.");
+    } else {
+      saveState(state);
+
+      console.log("Local notebook data is current.");
     }
   } catch (error) {
     console.warn("IndexedDB restore skipped:", error);
@@ -824,5 +835,4 @@ async function restoreFromIndexedDB() {
 renderHome();
 updateToolButtons();
 
-// Restore a newer copy from IndexedDB in the background.
 restoreFromIndexedDB();

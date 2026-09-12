@@ -290,11 +290,8 @@ export function loadState() {
   const localState = loadFromLocalStorage();
 
   if (localState) {
-    // Save a background IndexedDB copy.
-    saveToIndexedDB(localState).catch((error) => {
-      console.warn("Background IndexedDB migration failed:", error);
-    });
-
+    // Return Local Storage immediately.
+    // app.js will compare it with IndexedDB before saving anything.
     return localState;
   }
 

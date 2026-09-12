@@ -158,6 +158,13 @@ export class NotebookEditor {
     const textLayer = document.createElement("div");
     textLayer.className = "page-text-layer";
 
+    Object.assign(textLayer.style, {
+      position: "absolute",
+      inset: "0",
+      zIndex: "15",
+      pointerEvents: "none",
+    });
+
     wrapper.appendChild(textLayer);
 
     // --------------------------------------------------
@@ -230,6 +237,8 @@ export class NotebookEditor {
 
     this.renderTextLayer(wrapper, textLayer, page);
 
+    textLayer.style.pointerEvents = this.tool === "type" ? "auto" : "none";
+
     wrapper.classList.toggle("adjust-mode", this.tool === "adjust");
     wrapper.classList.toggle("write-mode", this.tool !== "adjust");
 
@@ -291,6 +300,48 @@ export class NotebookEditor {
   // ====================================================
   // TEXT LAYER
   // ====================================================
+
+  createTextBox(page, textLayer, x, y) {
+    this.ensurePageData(page);
+
+    const textData = {
+      id: `text_${Date.now().toString(36)}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      x: Math.max(10, Math.min(BASE_WIDTH - 160, x)),
+      y: Math.max(45, Math.min(BASE_HEIGHT - 60, y)),
+      text: "",
+      width: 260,
+      fontSize: 22,
+      color: this.color || "#222222",
+    };
+
+    page.texts.push(textData);
+
+    const textBox = this.createTextElement(page, textLayer, textData);
+
+    touch(page);
+    touch(this.note);
+
+    if (this.onChange) {
+      this.onChange();
+    }
+
+    requestAnimationFrame(() => {
+      textBox.focus();
+
+      const selection = window.getSelection();
+      const range = document.createRange();
+
+      range.selectNodeContents(textBox);
+      range.collapse(false);
+
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+
+    return textBox;
+  }
 
   renderTextLayer(wrapper, textLayer, page) {
     textLayer.innerHTML = "";

@@ -790,7 +790,7 @@ h1 {
   pointer-events: auto;
 }
 
-..typed-text {
+.typed-text {
   pointer-events: auto;
   cursor: text;
   border-radius: 4px;
@@ -890,4 +890,10 @@ h1 {
     scroll-behavior: auto !important;
     transition: none !important;
   }
+}
+/* Typing mode cursor */
+.page-wrapper.typing-mode,
+.page-wrapper.typing-mode .page-text-layer,
+.page-wrapper.typing-mode .page-canvas {
+  cursor: text;
 }
