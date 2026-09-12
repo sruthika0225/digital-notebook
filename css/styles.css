@@ -897,3 +897,19 @@ h1 {
 .page-wrapper.typing-mode .page-canvas {
   cursor: text;
 }
+/* Save status colors */
+.status-saving {
+  color: #b7791f;
+}
+
+.status-saved {
+  color: #2f855a;
+}
+
+.status-error {
+  color: #c53030;
+}
+
+.status-restored {
+  color: #3182ce;
+}

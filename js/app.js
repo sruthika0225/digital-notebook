@@ -55,34 +55,57 @@ let modalResolver = null;
 // STATUS / SAVE
 // ======================================================
 
-function setStatus(message) {
+function setStatus(message, type = "normal") {
   els.status.textContent = message;
+
+  els.status.classList.remove(
+    "status-saving",
+    "status-saved",
+    "status-error",
+    "status-restored",
+  );
+
+  if (type === "saving") {
+    els.status.classList.add("status-saving");
+  }
+
+  if (type === "saved") {
+    els.status.classList.add("status-saved");
+  }
+
+  if (type === "error") {
+    els.status.classList.add("status-error");
+  }
+
+  if (type === "restored") {
+    els.status.classList.add("status-restored");
+  }
 }
 
 function persist({ silent = false } = {}) {
   clearTimeout(saveTimer);
+
+  if (!silent) {
+    setStatus("Saving…", "saving");
+  }
 
   saveTimer = setTimeout(() => {
     try {
       saveState(state);
 
       if (!silent) {
-        setStatus("Saved locally");
+        setStatus("Saved locally", "saved");
       }
     } catch (error) {
-      console.error(error);
+      console.error("Save failed:", error);
 
-      setStatus("Could not save — storage may be full");
+      setStatus("Save failed", "error");
 
       alert(
-        "The notebook could not be saved. Large images can exceed browser localStorage limits. We will move this to IndexedDB in a later phase.",
+        "The notebook could not be saved. Please check available browser storage.",
       );
     }
   }, 180);
-
-  if (!silent) {
-    setStatus("Saving…");
-  }
 }
 
 function persistNow() {
@@ -90,10 +113,10 @@ function persistNow() {
 
   try {
     saveState(state);
-    setStatus("Saved locally");
+    setStatus("Saved locally", "saved");
   } catch (error) {
-    console.error(error);
-    setStatus("Could not save — storage may be full");
+    console.error("Save failed:", error);
+    setStatus("Save failed", "error");
   }
 }
 
@@ -815,7 +838,7 @@ async function restoreFromIndexedDB() {
       saveState(state);
       renderHome();
 
-      setStatus("Restored from IndexedDB");
+      setStatus("Restored from IndexedDB", "restored");
 
       console.log("Notebook restored from IndexedDB.");
     } else {
