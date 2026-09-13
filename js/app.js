@@ -6,7 +6,8 @@ import {
   createFolder,
   touch,
 } from "./storage.js";
-
+import "./handwriting-provider.js";
+import { convertHandwriting } from "./handwriting.js";
 import { NotebookEditor } from "./pages.js";
 
 let state = loadState();
@@ -378,6 +379,10 @@ function openNote(noteId) {
     onChange: (silent) => persist({ silent }),
   });
 
+  editor.onSelectionChange = (pageId, selection) => {
+    updateConvertButtonVisibility(!!selection);
+  };
+
   els.viewport.onscroll = () => {
     note.scrollTop = els.viewport.scrollTop;
 
@@ -710,6 +715,122 @@ function createTypeButton() {
 const typeButton = createTypeButton();
 
 // ======================================================
+// SELECT + CONVERT TO TEXT (uses the real HTML toolbar
+// button and the handwritingModal already in index.html)
+// ======================================================
+
+const selectButton = document.getElementById("selectBtn");
+const convertTextBtn = document.getElementById("convertTextBtn");
+
+const hw = {
+  modal: document.getElementById("handwritingModal"),
+  message: document.getElementById("handwritingModalMessage"),
+  preview: document.getElementById("handwritingPreview"),
+  result: document.getElementById("handwritingResult"),
+  loading: document.getElementById("handwritingLoading"),
+  cancelBtn: document.getElementById("cancelHandwritingBtn"),
+  convertBtn: document.getElementById("convertSelectedBtn"),
+  insertBtn: document.getElementById("insertHandwritingTextBtn"),
+  closeBtn: document.getElementById("closeHandwritingModal"),
+};
+
+let pendingSelectionImage = null;
+
+selectButton?.addEventListener("click", () => {
+  editor?.setTool("select");
+  updateToolButtons();
+  updateConvertButtonVisibility(!!editor?.getSelectionState());
+});
+
+function updateConvertButtonVisibility(hasSelection) {
+  if (convertTextBtn) convertTextBtn.disabled = !hasSelection;
+}
+
+function resetHandwritingModal() {
+  hw.message.textContent = "Ready to convert your selected handwriting.";
+  hw.result.classList.add("hidden");
+  hw.result.value = "";
+  hw.loading.classList.add("hidden");
+  hw.insertBtn.classList.add("hidden");
+  hw.convertBtn.classList.remove("hidden");
+  hw.convertBtn.disabled = false;
+}
+
+function openHandwritingModal() {
+  pendingSelectionImage = editor?.exportCurrentSelection();
+
+  if (!pendingSelectionImage) {
+    alert(
+      "Select some handwriting first — use the Select tool, then drag a box around it.",
+    );
+    return;
+  }
+
+  hw.preview.innerHTML = "";
+
+  const img = document.createElement("img");
+  img.src = pendingSelectionImage;
+  img.style.maxWidth = "100%";
+  img.style.borderRadius = "6px";
+  hw.preview.appendChild(img);
+
+  resetHandwritingModal();
+  hw.modal.classList.remove("hidden");
+}
+
+function closeHandwritingModal() {
+  hw.modal.classList.add("hidden");
+}
+
+convertTextBtn?.addEventListener("click", openHandwritingModal);
+
+hw.convertBtn.addEventListener("click", async () => {
+  if (!pendingSelectionImage) return;
+
+  hw.convertBtn.disabled = true;
+  hw.loading.classList.remove("hidden");
+  hw.message.textContent = "Reading your handwriting…";
+
+  try {
+    const text = await convertHandwriting(pendingSelectionImage);
+
+    hw.loading.classList.add("hidden");
+    hw.convertBtn.classList.add("hidden");
+    hw.result.classList.remove("hidden");
+    hw.result.value = text;
+    hw.insertBtn.classList.remove("hidden");
+    hw.message.textContent =
+      "Edit anything that came out wrong, then insert it. Your original handwriting is untouched.";
+  } catch (error) {
+    console.error("Handwriting conversion failed:", error);
+
+    hw.loading.classList.add("hidden");
+    hw.convertBtn.disabled = false;
+    hw.message.textContent =
+      error.message || "Could not convert the handwriting. Please try again.";
+  }
+});
+
+hw.insertBtn.addEventListener("click", () => {
+  const text = hw.result.value.trim();
+
+  if (text) {
+    editor.insertConvertedText(text);
+  }
+
+  editor.clearCurrentSelection();
+  updateConvertButtonVisibility(false);
+
+  editor.setTool("draw");
+  updateToolButtons();
+
+  closeHandwritingModal();
+});
+
+hw.cancelBtn.addEventListener("click", closeHandwritingModal);
+hw.closeBtn.addEventListener("click", closeHandwritingModal);
+
+// ======================================================
 // TOOL BUTTONS
 // ======================================================
 
@@ -721,6 +842,8 @@ function updateToolButtons() {
   els.adjust?.classList.toggle("active", editor?.tool === "adjust");
 
   typeButton?.classList.toggle("active", editor?.tool === "type");
+
+  selectButton?.classList.toggle("active", editor?.tool === "select");
 }
 
 els.pen.addEventListener("click", () => {

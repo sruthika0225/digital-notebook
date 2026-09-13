@@ -207,6 +207,12 @@ export class NotebookEditor {
     controller.setSize(this.size);
     controller.setColor(this.color);
 
+    // Let app.js know when a handwriting selection is made/cleared on
+    // this page, so it can show/hide the "Convert to Text" button.
+    controller.onSelectionChange = (selection) => {
+      this.onSelectionChange?.(page.id, selection);
+    };
+
     this.pageControllers.set(page.id, controller);
 
     // --------------------------------------------------
@@ -301,7 +307,7 @@ export class NotebookEditor {
   // TEXT LAYER
   // ====================================================
 
-  createTextBox(page, textLayer, x, y) {
+  createTextBox(page, textLayer, x, y, initialText = "") {
     this.ensurePageData(page);
 
     const textData = {
@@ -310,7 +316,7 @@ export class NotebookEditor {
         .slice(2, 8)}`,
       x: Math.max(10, Math.min(BASE_WIDTH - 160, x)),
       y: Math.max(45, Math.min(BASE_HEIGHT - 60, y)),
-      text: "",
+      text: initialText,
       width: 260,
       fontSize: 22,
       color: this.color || "#222222",
@@ -768,6 +774,54 @@ export class NotebookEditor {
     this.onChange?.();
 
     return true;
+  }
+
+  // ====================================================
+  // HANDWRITING SELECTION (for Convert to Text)
+  // ====================================================
+
+  getSelectionState() {
+    for (const [pageId, controller] of this.pageControllers) {
+      if (controller.hasSelection()) {
+        return { pageId, controller };
+      }
+    }
+
+    return null;
+  }
+
+  exportCurrentSelection() {
+    return this.getSelectionState()?.controller.exportSelection() || null;
+  }
+
+  clearCurrentSelection() {
+    this.getSelectionState()?.controller.clearSelection();
+  }
+
+  insertConvertedText(text) {
+    const state = this.getSelectionState();
+
+    if (!state) return null;
+
+    const { pageId, controller } = state;
+
+    const page = this.note.pages.find((item) => item.id === pageId);
+
+    if (!page) return null;
+
+    const selection = controller.getSelection();
+
+    const wrapper = this.container.querySelector(`[data-page-id="${pageId}"]`);
+
+    const textLayer = wrapper?.querySelector(".page-text-layer");
+
+    if (!textLayer) return null;
+
+    // Place the new text box right where the handwriting was selected.
+    const x = selection ? selection.x : 60;
+    const y = selection ? selection.y : 60;
+
+    return this.createTextBox(page, textLayer, x, y, text);
   }
 
   // ====================================================
