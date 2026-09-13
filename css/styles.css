@@ -879,9 +879,17 @@ h1 {
   text-align: left;
 }
 
-.typed-text:focus {
+/* Selection (independent of edit focus) now controls the visible
+   border — this is what lets a text box stay visibly "selected"
+   even after you click a toolbar button and it loses edit focus. */
+.typed-text.selected {
   border: 1px dashed var(--accent) !important;
   background: rgba(255, 255, 255, 0.6) !important;
+}
+
+.typed-text-delete:hover {
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 .typed-text-resize {
@@ -895,10 +903,6 @@ h1 {
   border-radius: 2px;
   cursor: nwse-resize;
   display: none;
-}
-
-.typed-text:focus .typed-text-resize {
-  display: block;
 }
 
 #typeBtn {

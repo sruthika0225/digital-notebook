@@ -28,10 +28,15 @@ export class NotebookEditor {
     this.color = "#222222";
 
     this.renderAll();
+    this.bindGlobalKeyboard();
   }
 
   setTool(tool) {
     this.tool = tool;
+
+    if (tool !== "type") {
+      this.deselectAllText();
+    }
 
     this.pageControllers.forEach((controller) => {
       controller.setTool(tool === "type" ? "draw" : tool);
@@ -59,6 +64,8 @@ export class NotebookEditor {
   setColor(color) {
     this.color = color;
     this.tool = "draw";
+
+    this.deselectAllText();
 
     this.pageControllers.forEach((controller) => {
       controller.setColor(color);
@@ -101,10 +108,24 @@ export class NotebookEditor {
       page.texts = [];
     }
 
-    // Make older text objects compatible with resizing.
+    // Make older text objects compatible with resizing, formatting,
+    // and display — anything missing gets a safe default instead of
+    // silently breaking on reload.
     page.texts.forEach((text) => {
       if (!Number.isFinite(text.width)) {
         text.width = 260;
+      }
+
+      if (!Number.isFinite(text.fontSize)) {
+        text.fontSize = 22;
+      }
+
+      if (typeof text.color !== "string") {
+        text.color = "#222222";
+      }
+
+      if (typeof text.text !== "string") {
+        text.text = "";
       }
     });
   }
@@ -334,6 +355,7 @@ export class NotebookEditor {
     }
 
     requestAnimationFrame(() => {
+      this.selectTextBox(textBox);
       textBox.focus();
 
       const selection = window.getSelection();
@@ -365,6 +387,7 @@ export class NotebookEditor {
     const textBox = document.createElement("div");
 
     textBox.className = "typed-text";
+    textBox.dataset.textId = textData.id;
 
     // IMPORTANT:
     // Only the actual text box is editable.
@@ -426,21 +449,17 @@ export class NotebookEditor {
     // --------------------------------------------------
     // FOCUS
     // --------------------------------------------------
-
-    textBox.addEventListener("focus", () => {
-      textBox.style.border = "1px dashed #aaa";
-      textBox.style.background = "rgba(255,255,255,.45)";
-    });
+    // Selection (the .selected class) is what controls the visible
+    // border/handle now — see selectTextBox()/deselectAllText().
+    // Focus only matters for actually typing; it no longer drives
+    // the visual state on its own, so clicking a toolbar button
+    // (which blurs the text box) doesn't make it look deselected.
 
     // --------------------------------------------------
     // BLUR / SAVE TEXT
     // --------------------------------------------------
 
     textBox.addEventListener("blur", () => {
-      textBox.style.border = "1px solid transparent";
-
-      textBox.style.background = "transparent";
-
       textData.text = textBox.textContent || "";
 
       // Remove completely empty boxes.
@@ -450,6 +469,7 @@ export class NotebookEditor {
         textBox.remove();
 
         resizeHandle.remove();
+        deleteBtn.remove();
       }
 
       touch(page);
@@ -501,6 +521,11 @@ export class NotebookEditor {
         return;
       }
 
+      // Select it right away — this is what shows the border/handle/
+      // delete button, independent of whether this turns into a tap
+      // (focus for editing) or a drag (move).
+      this.selectTextBox(textBox);
+
       event.preventDefault();
       event.stopPropagation();
 
@@ -551,10 +576,14 @@ export class NotebookEditor {
 
         textBox.style.top = `${textData.y}px`;
 
-        // Keep resize handle attached.
+        // Keep resize handle and delete button attached.
         resizeHandle.style.left = `${textData.x + textData.width - 6}px`;
 
         resizeHandle.style.top = `${textData.y + textBox.offsetHeight - 6}px`;
+
+        deleteBtn.style.left = `${textData.x + textData.width - 8}px`;
+
+        deleteBtn.style.top = `${textData.y - 10}px`;
       };
 
       const onUp = () => {
@@ -613,23 +642,75 @@ export class NotebookEditor {
     textLayer.appendChild(resizeHandle);
 
     // --------------------------------------------------
-    // SHOW HANDLE WHEN TEXT IS SELECTED
+    // DELETE BUTTON
     // --------------------------------------------------
 
-    textBox.addEventListener("focus", () => {
-      resizeHandle.style.display = "block";
+    const deleteBtn = document.createElement("button");
 
-      positionResizeHandle();
+    deleteBtn.type = "button";
+    deleteBtn.className = "typed-text-delete";
+    deleteBtn.title = "Delete text box";
+    deleteBtn.textContent = "×";
+
+    Object.assign(deleteBtn.style, {
+      position: "absolute",
+      width: "20px",
+      height: "20px",
+      lineHeight: "18px",
+      textAlign: "center",
+      padding: "0",
+      border: "1px solid #d8d0c3",
+      borderRadius: "50%",
+      background: "#fff",
+      color: "#b24a3d",
+      cursor: "pointer",
+      zIndex: "26",
+      display: "none",
     });
 
+    // Prevent this button from starting a drag on the text box
+    // underneath it, and don't let its click bubble up to the
+    // wrapper (which would otherwise create a brand-new text box
+    // at this spot in type mode).
+    deleteBtn.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.deleteTextBox(textBox);
+    });
+
+    textLayer.appendChild(deleteBtn);
+
+    // Attach references so selectTextBox()/deselectAllText() can
+    // find and toggle these without fragile DOM sibling lookups.
+    textBox._resizeHandle = resizeHandle;
+    textBox._deleteBtn = deleteBtn;
+    textBox._textData = textData;
+    textBox._page = page;
+
+    // --------------------------------------------------
+    // SELECTION (independent of edit focus)
+    // --------------------------------------------------
+
+    function positionOverlayControls() {
+      positionResizeHandle();
+    }
+
     textBox.addEventListener("blur", () => {
-      resizeHandle.style.display = "none";
+      // No-op here on purpose: staying selected through blur is the
+      // whole point (item 7) — only deselectAllText() hides these.
     });
 
     function positionResizeHandle() {
       resizeHandle.style.left = `${textData.x + textData.width - 6}px`;
 
       resizeHandle.style.top = `${textData.y + textBox.offsetHeight - 6}px`;
+
+      deleteBtn.style.left = `${textData.x + textData.width - 8}px`;
+
+      deleteBtn.style.top = `${textData.y - 10}px`;
     }
 
     // --------------------------------------------------
@@ -699,6 +780,72 @@ export class NotebookEditor {
       if (textLayer) {
         textLayer.style.pointerEvents = this.tool === "type" ? "auto" : "none";
       }
+    });
+  }
+
+  // ====================================================
+  // TEXT BOX SELECTION (item 7 — independent of edit focus,
+  // so it survives clicking a toolbar button)
+  // ====================================================
+
+  selectTextBox(textBox) {
+    this.deselectAllText(textBox);
+
+    textBox.classList.add("selected");
+
+    textBox._resizeHandle.style.display = "block";
+    textBox._deleteBtn.style.display = "block";
+  }
+
+  deselectAllText(except = null) {
+    this.container.querySelectorAll(".typed-text.selected").forEach((el) => {
+      if (el === except) return;
+
+      el.classList.remove("selected");
+
+      if (document.activeElement === el) {
+        el.blur();
+      }
+
+      if (el._resizeHandle) el._resizeHandle.style.display = "none";
+      if (el._deleteBtn) el._deleteBtn.style.display = "none";
+    });
+  }
+
+  deleteTextBox(textBox) {
+    const page = textBox._page;
+    const textData = textBox._textData;
+
+    if (page && textData) {
+      page.texts = page.texts.filter((item) => item.id !== textData.id);
+
+      touch(page);
+      touch(this.note);
+
+      this.onChange?.();
+    }
+
+    textBox._resizeHandle?.remove();
+    textBox._deleteBtn?.remove();
+    textBox.remove();
+  }
+
+  bindGlobalKeyboard() {
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+
+      const selected = this.container.querySelector(".typed-text.selected");
+
+      if (!selected) return;
+
+      // If the box itself is the thing receiving keystrokes (actively
+      // being edited), let Backspace/Delete behave normally — only
+      // intercept when it's selected but not currently focused, i.e.
+      // the user pressed Delete as a "remove this object" command.
+      if (document.activeElement === selected) return;
+
+      event.preventDefault();
+      this.deleteTextBox(selected);
     });
   }
 
