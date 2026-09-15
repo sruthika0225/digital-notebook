@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <link rel="icon" href="data:," />
     <meta charset="UTF-8" />
     <meta
       name="viewport"
@@ -29,6 +30,9 @@
         <span>Digital Notebook</span>
       </div>
       <div class="topbar-actions">
+        <button id="logoutBtn" class="secondary-btn hidden" type="button">
+          Logout
+        </button>
         <button
           id="backToNotesBtn"
           class="icon-btn hidden"
@@ -39,6 +43,69 @@
         <span id="syncStatus" class="save-status">Saved locally</span>
       </div>
     </header>
+    <!-- AUTHENTICATION SCREEN -->
+    <section id="authScreen" class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-icon">📓</div>
+
+        <h1>Digital Notebook</h1>
+
+        <p class="muted">Sign in to access your notes and notebooks.</p>
+
+        <div class="auth-tabs">
+          <button id="showLoginBtn" class="auth-tab active" type="button">
+            Sign In
+          </button>
+
+          <button id="showRegisterBtn" class="auth-tab" type="button">
+            Register
+          </button>
+        </div>
+
+        <form id="loginForm" class="auth-form">
+          <label for="loginEmail">Email</label>
+          <input
+            id="loginEmail"
+            type="email"
+            placeholder="Enter your email"
+            required
+          />
+
+          <label for="loginPassword">Password</label>
+          <input
+            id="loginPassword"
+            type="password"
+            placeholder="Enter your password"
+            required
+          />
+
+          <button type="submit" class="primary-btn">Sign In</button>
+        </form>
+
+        <form id="registerForm" class="auth-form hidden">
+          <label for="registerEmail">Email</label>
+          <input
+            id="registerEmail"
+            type="email"
+            placeholder="Enter your email"
+            required
+          />
+
+          <label for="registerPassword">Password</label>
+          <input
+            id="registerPassword"
+            type="password"
+            placeholder="Create a password"
+            minlength="6"
+            required
+          />
+
+          <button type="submit" class="primary-btn">Create Account</button>
+        </form>
+
+        <p id="authMessage" class="auth-message"></p>
+      </div>
+    </section>
 
     <main>
       <!-- MY NOTES -->
@@ -47,7 +114,7 @@
           <div>
             <p class="eyebrow">YOUR SPACE</p>
             <h1>My Notes</h1>
-            <p class="muted">
+            <section id="home" class="hidden">
               Open a note and continue exactly where you left off.
             </p>
           </div>
@@ -83,59 +150,131 @@
           </div>
         </div>
 
-        <div id="toolbar" class="toolbar">
-          <button
-            id="penBtn"
-            class="tool-btn active"
-            title="Write on the page, including over images"
-          >
-            ✏️ Pen
-          </button>
-          <button
-            id="eraserBtn"
-            class="tool-btn"
-            title="Erase writing, including over images"
-          >
-            🧽 Eraser
-          </button>
-          <button
-            id="adjustImagesBtn"
-            class="tool-btn"
-            title="Move and resize inserted images"
-          >
-            ↔️ Adjust Image
-          </button>
-          <button
-            id="selectBtn"
-            class="tool-btn"
-            title="Drag a box around handwriting to convert it to text"
-          >
-            🔍 Select
-          </button>
-          <button
-            id="convertTextBtn"
-            type="button"
-            class="tool-btn"
-            disabled
-            title="Select handwriting and convert it to text"
-          >
-            📝 Convert to Text
-          </button>
-          <label class="tool-control"
-            >Size
-            <input id="sizeInput" type="range" min="1" max="20" value="3" />
-            <span id="sizeValue">3</span>
-          </label>
-          <label class="tool-control"
-            >Color
-            <input id="colorInput" type="color" value="#222222" />
-          </label>
-          <button id="undoBtn" class="tool-btn" title="Undo current page">
-            ↶ Undo
-          </button>
-          <button id="redoBtn" class="tool-btn" title="Redo current page">
-            ↷ Redo
-          </button>
+        <div id="toolbar" class="toolbar" aria-label="Notebook tools">
+          <!-- Drawing tools -->
+          <div class="toolbar-group">
+            <button
+              id="penBtn"
+              class="tool-btn icon-tool active"
+              type="button"
+              aria-label="Pen"
+              title="Pen — write on the page"
+            >
+              ✎
+            </button>
+
+            <button
+              id="eraserBtn"
+              class="tool-btn icon-tool"
+              type="button"
+              aria-label="Eraser"
+              title="Eraser — erase handwriting"
+            >
+              ▱
+            </button>
+          </div>
+
+          <span class="toolbar-divider"></span>
+
+          <!-- Object tools -->
+          <div class="toolbar-group">
+            <button
+              id="adjustImagesBtn"
+              class="tool-btn icon-tool"
+              type="button"
+              aria-label="Adjust image"
+              title="Adjust image — move or resize images"
+            >
+              ⤢
+            </button>
+
+            <button
+              id="selectBtn"
+              class="tool-btn icon-tool"
+              type="button"
+              aria-label="Select handwriting"
+              title="Select handwriting for conversion"
+            >
+              ⌕
+            </button>
+
+            <button
+  id="convertTextBtn"
+  type="button"
+  class="tool-btn icon-tool hidden"
+  aria-label="Convert handwriting to text"
+  title="Convert selected handwriting to text"
+  disabled
+>
+  ▤
+</button>
+          </div>
+
+          <span class="toolbar-divider"></span>
+
+          <!-- Pen settings -->
+          <div class="toolbar-group toolbar-settings">
+            <label
+              class="tool-control icon-control"
+              for="sizeInput"
+              title="Pen size"
+              aria-label="Pen size"
+            >
+              <span class="toolbar-icon">◉</span>
+
+              <input
+                id="sizeInput"
+                type="range"
+                min="1"
+                max="20"
+                value="3"
+                aria-label="Pen size"
+              />
+
+              <span id="sizeValue" class="size-value">3</span>
+            </label>
+
+            <label
+              class="tool-control color-control"
+              for="colorInput"
+              title="Choose pen color"
+              aria-label="Choose pen color"
+            >
+              <span class="color-icon">●</span>
+
+              <input
+                id="colorInput"
+                type="color"
+                value="#222222"
+                aria-label="Choose pen color"
+              />
+            </label>
+          </div>
+
+          <span class="toolbar-divider"></span>
+
+          <!-- History -->
+          <div class="toolbar-group">
+            <button
+              id="undoBtn"
+              class="tool-btn icon-tool"
+              type="button"
+              aria-label="Undo"
+              title="Undo"
+            >
+              ↶
+            </button>
+
+            <button
+              id="redoBtn"
+              class="tool-btn icon-tool"
+              type="button"
+              aria-label="Redo"
+              title="Redo"
+            >
+              ↷
+            </button>
+          </div>
         </div>
 
         <div id="notebookViewport" class="notebook-viewport">

@@ -6,6 +6,14 @@ import {
   createFolder,
   touch,
 } from "./storage.js";
+import { auth } from "./firebase.js";
+
+import {
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import "./handwriting-provider.js";
 import { convertHandwriting } from "./handwriting.js";
 import { NotebookEditor } from "./pages.js";
@@ -13,6 +21,13 @@ import { NotebookEditor } from "./pages.js";
 let state = loadState();
 
 const els = {
+  authScreen: document.getElementById("authScreen"),
+  loginForm: document.getElementById("loginForm"),
+  registerForm: document.getElementById("registerForm"),
+  showLoginBtn: document.getElementById("showLoginBtn"),
+  showRegisterBtn: document.getElementById("showRegisterBtn"),
+  authMessage: document.getElementById("authMessage"),
+  logoutBtn: document.getElementById("logoutBtn"),
   home: document.getElementById("notesHome"),
   editor: document.getElementById("editorScreen"),
   notesTree: document.getElementById("notesTree"),
@@ -396,41 +411,210 @@ function openNote(noteId) {
     updateToolButtons();
   });
 }
-
 // ======================================================
 // NOTE / FOLDER MENUS
 // ======================================================
 
-function noteMenu(note) {
-  const choice = prompt(
-    `Options for "${note.title}"\n\n1 = Rename\n2 = Move to folder\n3 = Delete`,
-    "1",
-  );
+function createActionModal({
+  title,
+  message = "",
+  options = [],
+  inputLabel = "",
+  inputValue = "",
+  confirmText = "Confirm",
+  danger = false,
+}) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "action-modal-overlay";
 
-  if (choice === "1") renameNote(note);
+    const modal = document.createElement("div");
+    modal.className = "action-modal";
 
-  if (choice === "2") moveNote(note);
+    const heading = document.createElement("h3");
+    heading.textContent = title;
 
-  if (choice === "3") deleteNote(note);
+    const description = document.createElement("p");
+    description.className = "action-modal-message";
+    description.textContent = message;
+
+    modal.append(heading);
+
+    if (message) {
+      modal.append(description);
+    }
+
+    let input = null;
+
+    if (inputLabel) {
+      const label = document.createElement("label");
+      label.className = "action-modal-label";
+      label.textContent = inputLabel;
+
+      input = document.createElement("input");
+      input.className = "action-modal-input";
+      input.type = "text";
+      input.value = inputValue;
+      input.required = true;
+
+      modal.append(label, input);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "action-modal-actions";
+
+    function close(value) {
+      overlay.remove();
+      resolve(value);
+    }
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "modal-btn modal-cancel";
+    cancelButton.textContent = "Cancel";
+    cancelButton.addEventListener("click", () => close(null));
+
+    actions.append(cancelButton);
+
+    if (options.length > 0) {
+      options.forEach((option) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "modal-btn";
+
+        if (option.danger) {
+          button.classList.add("modal-danger");
+        }
+
+        button.textContent = option.label;
+
+        button.addEventListener("click", () => {
+          close(option.value);
+        });
+
+        actions.append(button);
+      });
+    } else {
+      const confirmButton = document.createElement("button");
+      confirmButton.type = "button";
+      confirmButton.className = "modal-btn";
+
+      if (danger) {
+        confirmButton.classList.add("modal-danger");
+      }
+
+      confirmButton.textContent = confirmText;
+
+      confirmButton.addEventListener("click", () => {
+        if (input && !input.value.trim()) {
+          input.focus();
+          return;
+        }
+
+        close(input ? input.value.trim() : true);
+      });
+
+      actions.append(confirmButton);
+    }
+
+    modal.append(actions);
+    overlay.append(modal);
+    document.body.append(overlay);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        close(null);
+      }
+    });
+
+    if (input) {
+      input.focus();
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          close(input.value.trim());
+        }
+
+        if (event.key === "Escape") {
+          close(null);
+        }
+      });
+    }
+  });
 }
 
-function folderMenu(folder) {
-  const choice = prompt(
-    `Options for "${folder.name}"\n\n1 = Rename\n2 = Delete`,
-    "1",
-  );
+async function noteMenu(note) {
+  const choice = await createActionModal({
+    title: note.title,
+    message: "Choose an action for this note.",
+    options: [
+      {
+        label: "Rename",
+        value: "rename",
+      },
+      {
+        label: "Move to folder",
+        value: "move",
+      },
+      {
+        label: "Delete",
+        value: "delete",
+        danger: true,
+      },
+    ],
+  });
 
-  if (choice === "1") renameFolder(folder);
+  if (choice === "rename") {
+    renameNote(note);
+  }
 
-  if (choice === "2") deleteFolder(folder);
+  if (choice === "move") {
+    moveNote(note);
+  }
+
+  if (choice === "delete") {
+    deleteNote(note);
+  }
 }
 
-function renameNote(note) {
-  const name = prompt("New note name:", note.title);
+async function folderMenu(folder) {
+  const choice = await createActionModal({
+    title: folder.name,
+    message: "Choose an action for this folder.",
+    options: [
+      {
+        label: "Rename",
+        value: "rename",
+      },
+      {
+        label: "Delete",
+        value: "delete",
+        danger: true,
+      },
+    ],
+  });
 
-  if (!name?.trim()) return;
+  if (choice === "rename") {
+    renameFolder(folder);
+  }
 
-  note.title = name.trim();
+  if (choice === "delete") {
+    deleteFolder(folder);
+  }
+}
+
+async function renameNote(note) {
+  const name = await createActionModal({
+    title: "Rename note",
+    inputLabel: "Note name",
+    inputValue: note.title,
+    confirmText: "Save name",
+  });
+
+  if (!name) return;
+
+  note.title = name;
 
   touch(note);
 
@@ -442,12 +626,17 @@ function renameNote(note) {
   }
 }
 
-function renameFolder(folder) {
-  const name = prompt("New folder name:", folder.name);
+async function renameFolder(folder) {
+  const name = await createActionModal({
+    title: "Rename folder",
+    inputLabel: "Folder name",
+    inputValue: folder.name,
+    confirmText: "Save name",
+  });
 
-  if (!name?.trim()) return;
+  if (!name) return;
 
-  folder.name = name.trim();
+  folder.name = name;
 
   persistNow();
   renderHome();
@@ -457,24 +646,36 @@ function renameFolder(folder) {
   }
 }
 
-function moveNote(note) {
+async function moveNote(note) {
   const folders = state.folders;
 
   if (!folders.length) {
-    alert("Create a folder first.");
+    await createActionModal({
+      title: "No folders available",
+      message: "Create a folder first before moving this note.",
+      options: [
+        {
+          label: "Okay",
+          value: true,
+        },
+      ],
+    });
 
     return;
   }
 
-  const names = folders
-    .map((folder, i) => `${i + 1}. ${folder.name}`)
-    .join("\n");
+  const choice = await createActionModal({
+    title: "Move note",
+    message: `Choose a folder for "${note.title}".`,
+    options: folders.map((folder) => ({
+      label: folder.name,
+      value: folder.id,
+    })),
+  });
 
-  const choice = Number(
-    prompt(`Move "${note.title}" to:\n\n${names}\n\nEnter folder number:`),
-  );
+  if (!choice) return;
 
-  const folder = folders[choice - 1];
+  const folder = folders.find((item) => item.id === choice);
 
   if (!folder) return;
 
@@ -486,12 +687,15 @@ function moveNote(note) {
   renderHome();
 }
 
-function deleteNote(note) {
-  if (
-    !confirm(`Delete "${note.title}" and all its pages? This cannot be undone.`)
-  ) {
-    return;
-  }
+async function deleteNote(note) {
+  const confirmed = await createActionModal({
+    title: "Delete note?",
+    message: `Delete "${note.title}" and all its pages? This cannot be undone.`,
+    confirmText: "Delete note",
+    danger: true,
+  });
+
+  if (!confirmed) return;
 
   if (currentNote?.id === note.id) {
     showHome();
@@ -503,16 +707,25 @@ function deleteNote(note) {
   renderHome();
 }
 
-function deleteFolder(folder) {
+async function deleteFolder(folder) {
   const notes = state.notes.filter((note) => note.folderId === folder.id);
 
   const message = notes.length
     ? `Delete "${folder.name}"? Its ${notes.length} note(s) will become Unfiled.`
     : `Delete "${folder.name}"?`;
 
-  if (!confirm(message)) return;
+  const confirmed = await createActionModal({
+    title: "Delete folder?",
+    message,
+    confirmText: "Delete folder",
+    danger: true,
+  });
 
-  notes.forEach((note) => (note.folderId = null));
+  if (!confirmed) return;
+
+  notes.forEach((note) => {
+    note.folderId = null;
+  });
 
   state.folders = state.folders.filter((item) => item.id !== folder.id);
 
@@ -695,7 +908,8 @@ function createTypeButton() {
 
   button.type = "button";
 
-  button.textContent = "⌨️ Type";
+  button.textContent = "T";
+  button.setAttribute("aria-label", "Type text");
 
   button.title = "Type text on the notebook page";
 
@@ -741,6 +955,13 @@ selectButton?.addEventListener("click", () => {
   updateToolButtons();
   updateConvertButtonVisibility(!!editor?.getSelectionState());
 });
+
+function showConvertTextButton(show) {
+  if (!els.convertTextBtn) return;
+
+  els.convertTextBtn.classList.toggle("hidden", !show);
+  els.convertTextBtn.disabled = !show;
+}
 
 function updateConvertButtonVisibility(hasSelection) {
   if (convertTextBtn) convertTextBtn.disabled = !hasSelection;
@@ -973,7 +1194,105 @@ async function restoreFromIndexedDB() {
     console.warn("IndexedDB restore skipped:", error);
   }
 }
+// ======================================================
+// FIREBASE AUTHENTICATION
+// ======================================================
 
+function showAuthMessage(message, isError = true) {
+  els.authMessage.textContent = message;
+  els.authMessage.style.color = isError ? "#b04435" : "#2f855a";
+}
+
+function showLoginForm() {
+  els.loginForm.classList.remove("hidden");
+  els.registerForm.classList.add("hidden");
+
+  els.showLoginBtn.classList.add("active");
+  els.showRegisterBtn.classList.remove("active");
+
+  showAuthMessage("");
+}
+
+function showRegisterForm() {
+  els.loginForm.classList.add("hidden");
+  els.registerForm.classList.remove("hidden");
+
+  els.showLoginBtn.classList.remove("active");
+  els.showRegisterBtn.classList.add("active");
+
+  showAuthMessage("");
+}
+
+els.showLoginBtn.addEventListener("click", showLoginForm);
+
+els.showRegisterBtn.addEventListener("click", showRegisterForm);
+
+els.loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = document.getElementById("loginEmail").value.trim();
+  const password = document.getElementById("loginPassword").value;
+
+  try {
+    showAuthMessage("Signing in...", false);
+
+    await signInWithEmailAndPassword(auth, email, password);
+
+    showAuthMessage("Signed in successfully.", false);
+  } catch (error) {
+    console.error("Login failed:", error);
+
+    showAuthMessage(error.message);
+  }
+});
+
+els.registerForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = document.getElementById("registerEmail").value.trim();
+  const password = document.getElementById("registerPassword").value;
+
+  try {
+    showAuthMessage("Creating account...", false);
+
+    await createUserWithEmailAndPassword(auth, email, password);
+
+    showAuthMessage("Account created successfully.", false);
+  } catch (error) {
+    console.error("Registration failed:", error);
+
+    showAuthMessage(error.message);
+  }
+});
+
+els.logoutBtn.addEventListener("click", async () => {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    console.error("Logout failed:", error);
+  }
+});
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    document.body.classList.remove("auth-locked");
+
+    els.authScreen.classList.add("hidden");
+    els.logoutBtn.classList.remove("hidden");
+
+    els.home.classList.remove("hidden");
+
+    console.log("Signed in as:", user.email);
+  } else {
+    document.body.classList.add("auth-locked");
+
+    els.authScreen.classList.remove("hidden");
+    els.logoutBtn.classList.add("hidden");
+
+    els.home.classList.add("hidden");
+    els.editor.classList.add("hidden");
+  }
+});
 // ======================================================
 // START
 // ======================================================
